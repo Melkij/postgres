@@ -359,7 +359,7 @@ my $port = $node->port;
 like(
 	$recovery_conf,
 	qr/^primary_conninfo = '.*port=$port.*'\n/m,
-	'recovery.conf sets primary_conninfo');
+	'recovery.auto.conf sets primary_conninfo');
 
 $node->command_ok(
 	[ 'pg_basebackup', '-D', "$tempdir/backupxd" ],
