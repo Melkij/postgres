@@ -33,9 +33,9 @@
     specified by the <varname>primary_conninfo</varname> setting and/or by
     fetching new WAL segments using <varname>restore_command</varname>
     In this mode you may use parameters
-    in both <xref linkend="archive-recovery-settings"> and
-    <xref linkend="standby-settings"> sections. Parameters from
-    <xref linkend="recovery-target-settings"> will not be used.
+    in both <xref linkend="archive-recovery-settings" /> and
+    <xref linkend="standby-settings"/> sections. Parameters from
+    <xref linkend="recovery-target-settings"/> will not be used.
    </para>
    
    <para>
@@ -46,9 +46,9 @@
     created, standby mode takes precedence. Targeted recovery mode will end when
     end of archived WAL is reached, or when <varname>recovery_target</varname> is reached.
     In this mode you may use parameters from both
-    <xref linkend="archive-recovery-settings"> and
-    <xref linkend="recovery-target-settings"> sections. Parameters from
-    <xref linkend="standby-settings"> will not be used.
+    <xref linkend="archive-recovery-settings"/> and
+    <xref linkend="recovery-target-settings"/> sections. Parameters from
+    <xref linkend="standby-settings"/> will not be used.
    </para>
 
   <sect1 id="archive-recovery-settings">
@@ -230,10 +230,10 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
         Target-type <literal>name</literal> specifies that recovery will
         proceed to the point specified by <varname>recovery_target_value</varname>
         when interpreted as the name of a restore point created with
-        <function>pg_create_restore_point()</>.
+        <function>pg_create_restore_point()</function>.
          The precise stopping point is also influenced by
-        <xref linkend="recovery-target-inclusive"> and
-        <xref linkend="recovery-target-timeline">.
+        <xref linkend="recovery-target-inclusive"/> and
+        <xref linkend="recovery-target-timeline"/>.
        </para>
 
        <para>
@@ -241,8 +241,8 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
         proceed to the point specified by <varname>recovery_target_value</varname>
         when interpreted as the timestamp of a transaction commit or abort.
         The precise stopping point is also influenced by
-        <xref linkend="recovery-target-inclusive"> and
-        <xref linkend="recovery-target-timeline">.
+        <xref linkend="recovery-target-inclusive"/> and
+        <xref linkend="recovery-target-timeline"/>.
        </para>
 
        <para>
@@ -255,18 +255,18 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
         The transactions that will be recovered are those that committed
         before (and optionally including) the specified one.
         The precise stopping point is also influenced by
-        <xref linkend="recovery-target-inclusive"> and
-        <xref linkend="recovery-target-timeline">.
+        <xref linkend="recovery-target-inclusive"/> and
+        <xref linkend="recovery-target-timeline"/>.
        </para>
 
        <para>
         Target-type <literal>lsn</literal> specifies that recovery will
         proceed to the point specified by <varname>recovery_target_value</varname>
         when interpreted as the LSN of any WAL record, parsed using the system
-        data type <link linkend="datatype-pg-lsn"><type>pg_lsn</></link>.
+        data type <link linkend="datatype-pg-lsn"><type>pg_lsn</type></link>.
         The precise stopping point is also influenced by
-        <xref linkend="recovery-target-inclusive"> and
-        <xref linkend="recovery-target-timeline">.
+        <xref linkend="recovery-target-inclusive"/> and
+        <xref linkend="recovery-target-timeline"/>.
        </para>
       </listitem>
      </varlistentry>
@@ -307,9 +307,9 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
         Specifies whether to stop just after the specified recovery target
         (<literal>true</literal>), or just before the recovery target
         (<literal>false</literal>).
-        Applies when <xref linkend="recovery-target-lsn"/>,
-        <xref linkend="recovery-target-time"/>, or
-        <xref linkend="recovery-target-xid"/> is specified.
+        Applies when <xref linkend="recovery-target-type"/> is specified
+        to <literal>lsn</literal>, <literal>timestamp</literal> or
+        <literal>xid</literal>. 
         This setting controls whether transactions
         having exactly the target WAL location (LSN), commit time, or transaction ID, respectively, will
         be included in the recovery.  Default is <literal>true</literal>.
