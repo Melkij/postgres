@@ -229,7 +229,7 @@ is($psql_rc, '0', "Restore of prepared transaction on promoted standby");
 # restart old master as new standby
 $cur_standby->enable_streaming($cur_master);
 $cur_standby->append_conf(
-	'recovery.conf', qq(
+	'postgresql.conf', qq(
 recovery_target_timeline='latest'
 ));
 $cur_standby->start;
@@ -267,7 +267,7 @@ is($psql_out, '1',
 # restart old master as new standby
 $cur_standby->enable_streaming($cur_master);
 $cur_standby->append_conf(
-	'recovery.conf', qq(
+	'postgresql.conf', qq(
 recovery_target_timeline='latest'
 ));
 $cur_standby->start;
@@ -307,7 +307,7 @@ is($psql_out, '1',
 # restart old master as new standby
 $cur_standby->enable_streaming($cur_master);
 $cur_standby->append_conf(
-	'recovery.conf', qq(
+	'postgresql.conf', qq(
 recovery_target_timeline='latest'
 ));
 $cur_standby->start;
