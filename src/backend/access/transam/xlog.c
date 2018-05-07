@@ -5329,13 +5329,13 @@ readRecoverySignalFile(void)
 void
 logRecoveryParameters(void)
 {
-	int	normal_log_level = LOG; //DEBUG2;
+	int	normal_log_level = DEBUG2;
  
 	/*
 	 * Log messages for recovery parameters at server start
 	 */
 	ereport(normal_log_level,
-		(errmsg_internal("standby_mode = '%s'", (StandbyModeRequested ? "on " : "off"))));
+		(errmsg_internal("standby_mode = '%s'", (StandbyModeRequested ? "on" : "off"))));
  
 	if (recoveryRestoreCommand != NULL)
 		ereport(normal_log_level,

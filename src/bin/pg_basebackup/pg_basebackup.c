@@ -1651,8 +1651,6 @@ GenerateRecoveryConf(PGconn *conn)
 		disconnect_and_exit(1);
 	}
 
-	appendPQExpBufferStr(recoveryconfcontents, "standby_mode = 'on'\n");
-
 	initPQExpBuffer(&conninfo_buf);
 	for (option = connOptions; option && option->keyword; option++)
 	{

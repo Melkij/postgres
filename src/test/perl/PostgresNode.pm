@@ -802,9 +802,7 @@ sub enable_streaming
 primary_conninfo='$root_connstr application_name=$name'
 ));
 
-	open my $standbysignal, ">>$pgdata/standby.signal";
-	print $standbysignal "\n# Allow replication (set up by PostgresNode.pm)\n";
-	close $standbysignal;
+	$self->request_standby();
 }
 
 # Internal routine to enable archive recovery command on a standby node
@@ -813,7 +811,6 @@ sub enable_restoring
 	my ($self, $root_node) = @_;
 	my $path = $vfs_path . $root_node->archive_dir;
 	my $name = $self->name;
-	my $pgdata = $self->data_dir;
 
 	print "### Enabling WAL restore for node \"$name\"\n";
 
@@ -833,9 +830,21 @@ sub enable_restoring
 		'postgresql.conf', qq(
 restore_command = '$copy_command'
 ));
-	open my $standbysignal, ">>$pgdata/standby.signal";
+	$self->request_standby();
+}
+
+# routine to place standby.signal file
+sub request_standby
+{
+	my ($self) = @_;
+	my $signalfile = $self->data_dir . "/standby.signal";
+
+	open my $standbysignal, ">>$signalfile";
 	print $standbysignal "\n# Allow replication (set up by PostgresNode.pm)\n";
 	close $standbysignal;
+
+	chmod($self->group_access() ? 0640 : 0600, $signalfile)
+	  or die("unable to set permissions for $signalfile");
 }
 
 # Internal routine to enable archiving
