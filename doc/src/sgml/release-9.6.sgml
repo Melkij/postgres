@@ -23,9 +23,14 @@
    </para>
 
    <para>
-    However, if the function marking mistakes mentioned in the first two
-    changelog entries below affect you, you will want to take steps to
-    correct your database catalogs.
+    However, if you use the <filename>adminpack</filename> extension,
+    you should update it as per the first changelog entry below.
+   </para>
+
+   <para>
+    Also, if the function marking mistakes mentioned in the second and
+    third changelog entries below affect you, you will want to take steps
+    to correct your database catalogs.
    </para>
 
    <para>
@@ -38,6 +43,33 @@
    <title>Changes</title>
 
    <itemizedlist>
+
+    <listitem>
+     <para>
+      Remove public execute privilege
+      from <filename>contrib/adminpack</filename>'s
+      <function>pg_logfile_rotate()</function> function (Stephen Frost)
+     </para>
+
+     <para>
+      <function>pg_logfile_rotate()</function> is a deprecated wrapper
+      for the core function <function>pg_rotate_logfile()</function>.
+      When that function was changed to rely on SQL privileges for access
+      control rather than a hard-coded superuser
+      check, <function>pg_logfile_rotate()</function> should have been
+      updated as well, but the need for this was missed.  Hence,
+      if <filename>adminpack</filename> is installed, any user could
+      request a logfile rotation, creating a minor security issue.
+     </para>
+
+     <para>
+      After installing this update, administrators should
+      update <filename>adminpack</filename> by performing
+      <literal>ALTER EXTENSION adminpack UPDATE</literal> in each
+      database in which <filename>adminpack</filename> is installed.
+      (CVE-2018-1115)
+     </para>
+    </listitem>
 
     <listitem>
      <para>
@@ -59,10 +91,12 @@
       installations will continue to contain the incorrect markings.
       Practical use of these functions seems to pose little hazard, but in
       case of trouble, it can be fixed by manually updating these
-      functions' <structname>pg_proc</structname> entries.  (Note that that
-      will need to be done in each database of the installation.)  Another
-      option is to <application>pg_upgrade</application> the database to a
-      version containing the corrected initial data.
+      functions' <structname>pg_proc</structname> entries, for example
+      <literal>ALTER FUNCTION pg_catalog.query_to_xml(text, boolean,
+      boolean, text) VOLATILE</literal>.  (Note that that will need to be
+      done in each database of the installation.)  Another option is
+      to <application>pg_upgrade</application> the database to a version
+      containing the corrected initial data.
      </para>
     </listitem>
 
@@ -75,15 +109,12 @@
      <para>
       The functions
       <function>brin_summarize_new_values</function>,
-      <function>brin_summarize_range</function>,
-      <function>brin_desummarize_range</function>,
       <function>gin_clean_pending_list</function>,
       <function>cursor_to_xml</function>,
       <function>cursor_to_xmlschema</function>,
       <function>ts_rewrite</function>,
-      <function>ts_stat</function>,
-      <function>binary_upgrade_create_empty_extension</function>, and
-      <function>pg_import_system_collations</function>
+      <function>ts_stat</function>, and
+      <function>binary_upgrade_create_empty_extension</function>
       should be marked parallel-unsafe; some because they perform database
       modifications directly, and others because they execute user-supplied
       queries that might do so.  They were marked parallel-restricted
@@ -93,10 +124,12 @@
       incorrect markings.  Practical use of these functions seems to pose
       little hazard unless <varname>force_parallel_mode</varname> is turned
       on.  In case of trouble, it can be fixed by manually updating these
-      functions' <structname>pg_proc</structname> entries.  (Note that that
-      will need to be done in each database of the installation.)  Another
-      option is to <application>pg_upgrade</application> the database to a
-      version containing the corrected initial data.
+      functions' <structname>pg_proc</structname> entries, for example
+      <literal>ALTER FUNCTION pg_catalog.brin_summarize_new_values(regclass)
+      PARALLEL UNSAFE</literal>.  (Note that that will need to be done in
+      each database of the installation.)  Another option is
+      to <application>pg_upgrade</application> the database to a version
+      containing the corrected initial data.
      </para>
     </listitem>
 
