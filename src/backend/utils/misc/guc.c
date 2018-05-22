@@ -11126,10 +11126,9 @@ check_recovery_target_timeline(char **newval, void **extra, GucSource source)
 		rttg = RECOVERY_TARGET_TIMELINE_CONTROLFILE;
 	else
 	{
-		TimeLineID tli;
-
 		errno = 0;
-		tli = (TimeLineID) strtoul(*newval, NULL, 0);
+		/* only validate number here */
+		(void) strtoul(*newval, NULL, 0);
 		if (errno == EINVAL || errno == ERANGE)
 		{
 			GUC_check_errdetail("recovery_target_timeline is not a valid number: \"%s\"",
