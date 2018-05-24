@@ -92,8 +92,9 @@ typedef enum
 	t == RECOVERY_TARGET_XID   ? "xid" : ( \
 	t == RECOVERY_TARGET_TIME  ? "timestamp" : ( \
 	t == RECOVERY_TARGET_NAME  ? "name" : ( \
-	t == RECOVERY_TARGET_LSN   ? "lsn" : \
-					"immediate" )))))
+	t == RECOVERY_TARGET_LSN   ? "lsn" : ( \
+	t == RECOVERY_TARGET_IMMEDIATE ? "immediate" : \
+					"none" ))))))
 
 /*
  * Recovery target action.
@@ -170,7 +171,7 @@ extern bool StandbyMode;
 extern char *PrimaryConnInfo;
 extern char *PrimarySlotName;
 
-extern char *signal_file_directory;
+extern char *PromoteSignalFile;
 
 extern char *recoveryTargetTLIString;
 extern RecoveryTargetTimeLineGoal recoveryTargetTimeLineGoal;

@@ -280,12 +280,11 @@ TimestampTz recoveryDelayUntilTime;
 bool StandbyModeRequested = false;
 char *PrimaryConnInfo = NULL;
 char *PrimarySlotName = NULL;
-char *TriggerFile = NULL;
 
 /* are we currently in standby mode? */
 bool		StandbyMode = false;
 
-char PromoteSignalFile[MAXPGPATH];
+char *PromoteSignalFile = NULL;
 char RecoverySignalFile[MAXPGPATH];
 char StandbySignalFile[MAXPGPATH];
 
@@ -5255,22 +5254,21 @@ static void
 readRecoverySignalFile(void)
 {
 	struct stat stat_buf;
- 
+
 	if (IsBootstrapProcessingMode())
 		return;
-		
+
 	/*
 	 * Set paths for named signal files
 	 */
 	snprintf(StandbySignalFile, MAXPGPATH, "%s", STANDBY_SIGNAL_FILE);
 	snprintf(RecoverySignalFile, MAXPGPATH, "%s", RECOVERY_SIGNAL_FILE);
-	snprintf(PromoteSignalFile, MAXPGPATH, "%s", PROMOTE_SIGNAL_FILE);
 
 	/*
 	 * Check for old recovery API file: recovery.conf
 	 */
 	if (stat(RECOVERY_COMMAND_FILE, &stat_buf) == 0)
- 		ereport(FATAL,
+		ereport(FATAL,
 			(errcode_for_file_access(),
 			 errmsg("deprecated API using recovery command file \"%s\"",
 					RECOVERY_COMMAND_FILE)));
@@ -5279,18 +5277,18 @@ readRecoverySignalFile(void)
 	 * Remove unused .done file, if present. Ignore if absent.
 	 */
 	unlink(RECOVERY_COMMAND_DONE);
- 
- 	/*
+
+	/*
 	 * Check for recovery signal files and if found, fsync them
 	 * since they represent server state information.
 	 *
 	 * If present, standby signal file takes precedence.
 	 * If neither is present then we won't enter archive recovery.
- 	 */
+	 */
 	if (stat(StandbySignalFile, &stat_buf) == 0)
 	{
 		int         fd;
- 
+
 		fd = BasicOpenFilePerm(StandbySignalFile, O_RDWR | PG_BINARY | get_sync_bit(sync_method),
 							   S_IRUSR | S_IWUSR);
 		pg_fsync(fd);
@@ -5300,7 +5298,7 @@ readRecoverySignalFile(void)
 	else if (stat(RecoverySignalFile, &stat_buf) == 0)
 	{
 		int         fd;
- 
+
 		fd = BasicOpenFilePerm(RecoverySignalFile, O_RDWR | PG_BINARY | get_sync_bit(sync_method),
 							   S_IRUSR | S_IWUSR);
 		pg_fsync(fd);
@@ -5311,7 +5309,7 @@ readRecoverySignalFile(void)
 	StandbyModeRequested = false;
 	ArchiveRecoveryRequested = false;
 	if (standby_signal_file_found)
- 	{
+	{
 		StandbyModeRequested = true;
 		ArchiveRecoveryRequested = true;
 	}
@@ -5322,7 +5320,7 @@ readRecoverySignalFile(void)
 	}
 	else
 		return;
- 
+
 	/*
 	 * We don't support standby_mode in standalone backends; that requires
 	 * other processes such as the WAL receiver to be alive.
@@ -5335,22 +5333,22 @@ readRecoverySignalFile(void)
 	logRecoveryParameters();
 	validateRecoveryParameters();
 }
- 
+
 void
 logRecoveryParameters(void)
 {
 	int	normal_log_level = DEBUG2;
- 
+
 	/*
 	 * Log messages for recovery parameters at server start
 	 */
 	ereport(normal_log_level,
 		(errmsg_internal("standby_mode = '%s'", (StandbyModeRequested ? "on" : "off"))));
- 
+
 	if (recoveryRestoreCommand != NULL)
 		ereport(normal_log_level,
 			(errmsg_internal("restore_command = '%s'", recoveryRestoreCommand)));
- 
+
 	if (recoveryEndCommand != NULL)
 		ereport(normal_log_level,
 			(errmsg_internal("recovery_end_command = '%s'", recoveryEndCommand)));
@@ -5392,14 +5390,14 @@ logRecoveryParameters(void)
 			ereport(normal_log_level,
 				(errmsg_internal("recovery_target_timeline = 'latest'")));
 		else
- 		{
+		{
 			Assert(recoveryTargetTimeLineGoal == RECOVERY_TARGET_TIMELINE_NUMERIC);
 			ereport(normal_log_level,
 				(errmsg_internal("recovery_target_timeline = '%u'",
 					recoveryTargetTLIRequested)));
- 		}
+		}
 	}
- 
+
 	ereport(normal_log_level,
 		(errmsg_internal("recovery_target_action = '%s'", RecoveryTargetActionText(recoveryTargetAction))));
 }
@@ -5412,9 +5410,9 @@ validateRecoveryParameters(void)
 
 	if (recoveryTarget > RECOVERY_TARGET_UNSET &&
 		recoveryTargetValue == NULL)
- 			ereport(FATAL,
- 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("must specify recovery_target_value when recovery_target_type is set")));
+			ereport(FATAL,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					errmsg("must specify recovery_target_value when recovery_target_type is set")));
 
 	/*
 	 * Check for compulsory parameters
@@ -5450,7 +5448,7 @@ validateRecoveryParameters(void)
 	 * history files from the archive.
 	 */
 	if (recoveryTargetTimeLineGoal == RECOVERY_TARGET_TIMELINE_NUMERIC)
- 	{
+	{
 		TimeLineID rtli = recoveryTargetTLIRequested;
 
 		/* Timeline 1 does not have a history file, all else should */
@@ -5460,7 +5458,7 @@ validateRecoveryParameters(void)
 					 errmsg("recovery target timeline %u does not exist",
 							rtli)));
 		recoveryTargetTLI = rtli;
- 
+
 		/*
 		 * The user has requested a specific tli. This might be the latest
 		 * timeline but we don't know that; the point here is that we do not
@@ -6317,9 +6315,9 @@ StartupXLOG(void)
 	else
 		recoveryTargetTLI = ControlFile->checkPointCopy.ThisTimeLineID;
 
- 	/*
+	/*
 	 * Check for signal files, and if so set up state for offline recovery
- 	 */
+	 */
 	readRecoverySignalFile();
 
 	if (ArchiveRecoveryRequested)
@@ -9292,8 +9290,8 @@ CreateRestartPoint(int flags)
 	 */
 	if (archiveCleanupCommand)
 		ExecuteRecoveryCommand(archiveCleanupCommand,
- 							   "archive_cleanup_command",
- 							   false);
+							   "archive_cleanup_command",
+							   false);
 
 	return true;
 }
@@ -11784,7 +11782,7 @@ WaitForWALToBecomeAvailable(XLogRecPtr RecPtr, bool randAccess,
 					 * that when we later jump backwards to start redo at
 					 * RedoStartLSN, we will have the logs streamed already.
 					 */
-					if (PrimaryConnInfo)
+					if (PrimaryConnInfo && strcmp(PrimaryConnInfo,"") != 0)
 					{
 						XLogRecPtr	ptr;
 						TimeLineID	tli;
@@ -12153,13 +12151,12 @@ CheckForStandbyTrigger(void)
 		return true;
 	}
 
-	/*
-	 * Check for PromoteSignalFile... this is now a constant filename, with only the
-	 * filepath varying, so a user can still specify what they need.
-	 */
+	if (PromoteSignalFile == NULL)
+		return false;
+
 	if (stat(PromoteSignalFile, &stat_buf) == 0)
- 	{
- 		ereport(LOG,
+	{
+		ereport(LOG,
 				(errmsg("promote signal file found: %s", PromoteSignalFile)));
 		unlink(PromoteSignalFile);
 		triggered = true;

@@ -1142,7 +1142,7 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 				WRITE_TAR_DATA(recoveryconfcontents->data, recoveryconfcontents->len);
 				if (padding)
 					WRITE_TAR_DATA(zerobuf, padding);
-					
+
 				tarCreateHeader(header, STANDBY_SIGNAL_FILE, NULL,
 								0, /* zero-length file */
 								0600, 04000, 02000,
@@ -1250,7 +1250,7 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 						 * contents have to be skipped if the filename matches
 						 * config file - find out the size of the file
 						 * padded to the next multiple of 512
-						 * 
+						 *
 						 * Note we don't skip STANDBY_SIGNAL_FILE (correct??)
 						 */
 						int			padding;
@@ -1737,7 +1737,7 @@ WriteRecoveryConf(void)
 	}
 
 	fclose(cf);
-	
+
 	snprintf(filename, MAXPGPATH, "%s/%s", basedir, STANDBY_SIGNAL_FILE);
 	cf = fopen(filename, "w");
 	if (cf == NULL)

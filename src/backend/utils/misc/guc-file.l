@@ -198,7 +198,7 @@ ProcessConfigFileInternal(GucContext context, bool applySettings, int elevel)
 	 *
 	 * First, parse any RECOVERY_AUTOCONF_FILENAME, if it has been generated
 	 * by pg_basebackup
-	 * 
+	 *
 	 * Parse the PG_AUTOCONF_FILENAME file, if present, after the main file to
 	 * replace any parameters set by ALTER SYSTEM command.
 	 */
@@ -213,7 +213,7 @@ ProcessConfigFileInternal(GucContext context, bool applySettings, int elevel)
 			ConfFileWithError = RECOVERY_AUTOCONF_FILENAME;
 			goto bail_out;
 		}
-		
+
 		if (!ParseConfigFile(PG_AUTOCONF_FILENAME, false,
 							 NULL, 0, 0, elevel,
 							 &head, &tail))

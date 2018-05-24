@@ -18,14 +18,14 @@
    </para>
 
    <para>
-    The database server can also be started "in recovery" a term that covers
+    The database server can also be started <literal>in recovery</literal>, a term that covers
     using the server as a standby or for executing a targeted recovery. Typically
     standby mode would be used to provide high availability and/or read
     scalability, whereas a targeted recovery is used to recover from data loss.
    </para>
 
    <para>
-     To start the server in standby mode create a zero-length file
+     To start the server in standby mode create file
     called <filename>standby.signal</filename><indexterm><primary>standby.signal</primary></indexterm>
     in the data directory. The server will enter recovery and
     will not stop recovery when the end of archived WAL is reached, but
@@ -182,11 +182,11 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
     <title>Recovery Target Settings</title>
 
      <para>
-      By default, recovery will recover to the end of the WAL log. An earlier
+      By default, recovery will process to the end of the WAL log. An earlier
       stopping point may be specified using <varname>recovery_target_type</varname>
       and in most cases also <varname>recovery_target_value</varname>, plus the optional
       parameters <varname>recovery_target_inclusive</varname>,
-      <varname>recovery_targeti_timeline</varname> and <varname>recovery_target_action</varname>.
+      <varname>recovery_target_timeline</varname> and <varname>recovery_target_action</varname>.
      </para>
 
      <para>
@@ -396,8 +396,7 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
      <variablelist>
 
        <para>
-        Parameter settings may be changed only at server start, though later
-        patches may add this capability.
+        New values for those parameters are considered only at restart of the server
        </para>
        <varlistentry id="primary-conninfo" xreflabel="primary_conninfo">
         <term><varname>primary_conninfo</varname> (<type>string</type>)
