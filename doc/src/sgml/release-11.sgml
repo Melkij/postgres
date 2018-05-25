@@ -20,7 +20,100 @@
 
    <itemizedlist>
 
-   <listitem><para>XXX</para></listitem>
+    <listitem>
+     <para>
+      Major improvements to partitioning:
+      <itemizedlist>
+       <listitem>
+        <para>
+         Partitioning by a hash key
+        </para>
+       </listitem>
+       <listitem>
+        <para>
+         <command>UPDATE</command> statements that change a partition key
+         now move affected rows to the appropriate partitions
+        </para>
+       </listitem>
+       <listitem>
+        <para>
+         Improved <command>SELECT</command> query performance due to
+         enhanced partition elimination during query processing and
+         execution
+        </para>
+       </listitem>
+       <listitem>
+        <para>
+         Support for <literal>PRIMARY KEY</literal>, <literal>FOREIGN
+         KEY</literal>, indexes, and triggers on partitioned tables
+        </para>
+       </listitem>
+      </itemizedlist>
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Improvements to parallelism:
+      <itemizedlist>
+       <listitem>
+        <para>
+         Parallelized hash joins
+        </para>
+       </listitem>
+       <listitem>
+        <para>
+         Parallelized <command>CREATE INDEX</command> for B-tree indexes
+        </para>
+       </listitem>
+       <listitem>
+        <para>
+         Parallelized <command>CREATE TABLE .. AS</command>,
+         <command>CREATE MATERIALIZED VIEW</command>, and certain
+         queries using <literal>UNION</literal>
+        </para>
+       </listitem>
+      </itemizedlist>
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      SQL stored procedures, with support for embedded transactions
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      JIT compilation of some SQL code, including support for fast evaluation
+      of expressions
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Window functions now support all options shown in the SQL:2011
+      standard, including <literal>RANGE <replaceable>distance</replaceable>
+      PRECEDING/FOLLOWING</literal>, <literal>GROUPS</literal> mode, and
+      frame exclusion options
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Channel binding for SCRAM authentication, to prevent potential
+      man-in-the-middle attacks on database connections
+     </para>
+    </listitem>
+
+    <listitem>
+     <para>
+      Many other useful performance improvements, including making
+      <command>ALTER TABLE .. ADD COLUMN</command> with a
+      non-null column default faster
+     </para>
+    </listitem>
+
    </itemizedlist>
 
    <para>
@@ -76,7 +169,7 @@
        <para>
         <application>pg_dump</application> and
         <application>pg_restore</application>, without
-        <option>--clean</option>, no longer dump/restore database comments
+        <option>--create</option>, no longer dump/restore database comments
         and security labels.
        </para>
 
@@ -122,7 +215,8 @@
 -->
 
        <para>
-        Change the ps process display labels to match the <link
+        Change the ps process display
+        labels for background workers to match the <link
         linkend="pg-stat-activity-view"><structname>pg_stat_activity</structname>.<structfield>backend_type</structfield></link>
         labels (Peter Eisentraut)
        </para>
@@ -193,15 +287,30 @@
        <para>
         Have libpq's <link
         linkend="libpq-pqhost"><function>PQhost()</function></link>
-        always return the actual connected host (Hari Babu)
+        always return the actual connected host (Haribabu Kommi)
        </para>
 
        <para>
         Previously <function>PQhost()</function> often returned the
         supplied host parameters, which could contain several hosts.
-        The same is true of <function>PQport()</function>, which now
-        returns the actual port number, not the multiple supplied port
-        numbers.  ACCURATE?
+        It will now also return the host's IP address if the host name was
+        not supplied.  The same is true of <function>PQport()</function>,
+        which now returns the actual port number, not the multiple supplied
+        port numbers.
+       </para>
+      </listitem>
+
+      <listitem>
+<!--
+2017-09-18 [f8e5f156b] Rearm statement_timeout after each executed query.
+
+-->
+
+       <para>
+        In the <link linkend="protocol-query-concepts">Extended Query
+        Protocol</link>, have <varname>statement_timeout</varname>
+        apply to each Execute message, not to all commands before Sync
+        (Tatsuo Ishii, Andres Freund)
        </para>
       </listitem>
 
@@ -266,7 +375,7 @@
        </para>
 
        <para>
-        These function are now present by default.  Old <link
+        These functions are now present by default.  Old <link
         linkend="adminpack"><application>adminpack</application></link>
         installs will continue to have access to these functions until
         they are updated via <command>ALTER EXTENSION ... UPDATE</command>.
@@ -331,7 +440,7 @@ Branch: master [6bdf1303b] Avoid wrong results for power() with NaN
        <para>
         Consistently return <literal>NaN</literal> for
         <literal>NaN</literal> inputs to <function>power()</function>
-        on older platforms (Dang Minh Huong)
+        on older platforms (Tom Lane, Dang Minh Huong)
        </para>
 
       </listitem>
@@ -345,7 +454,7 @@ Branch: master [6bdf1303b] Avoid wrong results for power() with NaN
 
    <para>
     Below you will find a detailed account of the changes between
-    <productname>PostgreSQL</productname> 10 and the previous major
+    <productname>PostgreSQL</productname> 11 and the previous major
     release.
    </para>
 
@@ -634,6 +743,20 @@ same commits as above
 
       <listitem>
 <!--
+2017-11-16 [e89a71fb4] Pass InitPlan values to workers via Gather (Merge).
+2018-03-29 [3f90ec859] Postpone generate_gather_paths for topmost scan/join rel
+2018-03-29 [11cf92f6e] Rewrite the code that applies scan/join targets to paths
+-->
+
+       <para>
+        Allow single-evaluation queries, e.g. <literal>WHERE</literal>
+        clause aggregate queries, and functions in the target list to be
+        parallelized (Amit Kapila, Robert Haas)
+       </para>
+      </listitem>
+
+      <listitem>
+<!--
 2017-11-15 [e5253fdc4] Add parallel_leader_participation GUC.
 -->
 
@@ -657,6 +780,18 @@ same commits as above
         Allow parallelization of commands <command>CREATE TABLE
         .. AS</command>, <command>SELECT INTO</command>, and
         <command>CREATE MATERIALIZED VIEW</command> (Haribabu Kommi)
+       </para>
+      </listitem>
+
+      <listitem>
+<!--
+2017-08-16 [3cda10f41] Use atomic ops to hand out pages to scan in parallel sca
+
+-->
+
+       <para>
+        Improve performance of sequential scans with many parallel workers
+        (David Rowley)
        </para>
       </listitem>
 
@@ -1103,7 +1238,7 @@ same commits as above
        <para>
         Add libpq option to support channel binding when using <link
         linkend="auth-password"><acronym>SCRAM</acronym></link>
-        authentication (Peter Eisentraut)
+        authentication (Michael Paquier)
        </para>
 
        <para>
@@ -1326,12 +1461,13 @@ same commits as above
 -->
 
        <para>
-        Allow bytes to be specified for server variable sizes (Beena
-        Emerson)
+        Allow server options related to memory and file sizes to be
+        specified as number of bytes (Beena Emerson)
        </para>
 
        <para>
-        The specification is "B".
+        The new unit is "B".  This is in addition to "kB", "MB", "GB"
+        and "TB", which were accepted previously.
        </para>
 
       </listitem>
@@ -1841,6 +1977,23 @@ same commits as above
        <para>
         Add the ability to define PL/pgSQL record types as not null,
         constant, or with initial values (Tom Lane)
+       </para>
+      </listitem>
+
+      <listitem>
+<!--
+2018-02-13 [4b93f5799] Make plpgsql use its DTYPE_REC code paths for composite-
+
+-->
+
+       <para>
+        Allow PL/pgSQL to handle changes to composite types (e.g. record,
+        row) that happen between the first and later function executions
+        in the same session (Tom Lane)
+       </para>
+
+       <para>
+        Previously such circumstances generated errors.
        </para>
       </listitem>
 
@@ -2449,8 +2602,14 @@ same commits as above
 -->
 
        <para>
-        Add support for with huge(large) pages on Windows (Takayuki
-        Tsunakawa, Thomas Munro)
+        Add support for <firstterm>large pages</firstterm> on Windows
+        (Takayuki Tsunakawa, Thomas Munro)
+       </para>
+
+       <para>
+        This is controlled by the <link
+        linkend="guc-huge-pages">huge_pages</link> configuration
+        parameter.
        </para>
       </listitem>
 
@@ -2461,7 +2620,8 @@ same commits as above
 
        <para>
         Add support for <productname>ARMv8</productname> hardware
-        <acronym>CRC</acronym> calculations (Yuqi Gu, Heikki Linnakangas)
+        <acronym>CRC</acronym> calculations (Yuqi Gu, Heikki
+        Linnakangas, Thomas Munro)
        </para>
       </listitem>
 
