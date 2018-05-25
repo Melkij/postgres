@@ -3386,7 +3386,7 @@ static struct config_string ConfigureNamesString[] =
 
 	{
 		{"promote_signal_file", PGC_POSTMASTER, REPLICATION_STANDBY,
-			gettext_noop(""),
+			gettext_noop("Specifies a filename whose presence ends recovery in the standby"),
 			NULL
 		},
 		&PromoteSignalFile,
@@ -3397,7 +3397,8 @@ static struct config_string ConfigureNamesString[] =
 	{
 		{"primary_conninfo", PGC_POSTMASTER, REPLICATION_STANDBY,
 			gettext_noop("Sets the connection string to be used to connect with the sending server."),
-			NULL
+			NULL,
+			GUC_SUPERUSER_ONLY
 		},
 		&PrimaryConnInfo,
 		NULL,
