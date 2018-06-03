@@ -977,6 +977,7 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 	bool		basetablespace = PQgetisnull(res, rownum, 0);
 	bool		in_tarhdr = true;
 	bool		skip_file = false;
+	bool		is_postgresql_auto_conf = false;
 	size_t		tarhdrsz = 0;
 	pgoff_t		filesz = 0;
 
@@ -1256,6 +1257,7 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 						int			padding;
 
 						skip_file = (strcmp(&tarhdr[0], RECOVERY_AUTOCONF_FILENAME) == 0);
+						is_postgresql_auto_conf = (strcmp(&tarhdr[0], "postgresql.auto.conf") == 0);
 
 						filesz = read_tar_number(&tarhdr[124], 12);
 
@@ -1265,12 +1267,26 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 						/* Next part is the file, not the header */
 						in_tarhdr = false;
 
-						/*
-						 * If we're not skipping the file, write the tar
-						 * header unmodified.
-						 */
-						if (!skip_file)
+						if (is_postgresql_auto_conf && writerecoveryconf)
+						{
+							/* build new tar header */
+							char		header[512];
+
+							tarCreateHeader(header, "postgresql.auto.conf", NULL,
+											filesz + recoveryconfcontents->len,
+											pg_file_create_mode, 04000, 02000,
+											time(NULL));
+
+							WRITE_TAR_DATA(header, sizeof(header));
+						}
+						else if (!skip_file)
+						{
+							/*
+							 * If we're not skipping the file, write the tar
+							 * header unmodified.
+							 */
 							WRITE_TAR_DATA(tarhdr, 512);
+						}
 					}
 				}
 				else
@@ -1293,6 +1309,16 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 						rr -= bytes2write;
 						pos += bytes2write;
 						filesz -= bytes2write;
+
+						if (filesz == 0 && is_postgresql_auto_conf && writerecoveryconf)
+						{
+							int padding;
+							padding = ((recoveryconfcontents->len + 511) & ~511) - recoveryconfcontents->len;
+
+							WRITE_TAR_DATA(recoveryconfcontents->data, recoveryconfcontents->len);
+							//~ if (padding)
+								//~ WRITE_TAR_DATA(zerobuf, padding);
+						}
 					}
 					else
 					{
