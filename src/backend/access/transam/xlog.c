@@ -5241,14 +5241,6 @@ str_time(pg_time_t tnow)
  *
  * See if there are any recovery signal files and if so, set state for
  * recovery.
- *
- *   !!!! NOTE !!!!
- * There is a discrepancy in the design here: pg_basebackup -R expects
- * to be able to write a file containing backend parameters. To allow
- * that the server reads parameters from a file called
- * recovery.auto.conf in the data directory. So one might ask why we
- * allow that and yet disallow the use of recovery.conf. I have no
- * explanation for that, only what you see is what was requested.
  */
 static void
 readRecoverySignalFile(void)
