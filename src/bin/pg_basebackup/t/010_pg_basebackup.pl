@@ -358,16 +358,16 @@ SKIP:
 
 $node->command_ok([ 'pg_basebackup', '-D', "$tempdir/backupR", '-R' ],
 	'pg_basebackup -R runs');
-ok(-f "$tempdir/backupR/recovery.auto.conf", 'recovery conf file was created');
+ok(-f "$tempdir/backupR/postgresql.auto.conf", 'postgresql.auto.conf present');
 ok(-f "$tempdir/backupR/standby.signal", 'standby mode is configured');
-my $recovery_conf = slurp_file "$tempdir/backupR/recovery.auto.conf";
+my $recovery_conf = slurp_file "$tempdir/backupR/postgresql.auto.conf";
 rmtree("$tempdir/backupR");
 
 my $port = $node->port;
 like(
 	$recovery_conf,
 	qr/^primary_conninfo = '.*port=$port.*'\n/m,
-	'recovery.auto.conf sets primary_conninfo');
+	'postgresql.auto.conf sets primary_conninfo');
 
 $node->command_ok(
 	[ 'pg_basebackup', '-D', "$tempdir/backupxd" ],
@@ -475,7 +475,7 @@ $node->command_ok(
 	],
 	'pg_basebackup with replication slot and -R runs');
 like(
-	slurp_file("$tempdir/backupxs_sl_R/recovery.auto.conf"),
+	slurp_file("$tempdir/backupxs_sl_R/postgresql.auto.conf"),
 	qr/^primary_slot_name = 'slot1'\n/m,
 	'recovery conf file sets primary_slot_name');
 
