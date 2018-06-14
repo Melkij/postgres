@@ -5570,19 +5570,22 @@ exitArchiveRecovery(TimeLineID endTLI, XLogRecPtr endOfLog)
 	unlink(recoveryPath);		/* ignore any error */
 
 	/*
-	 * Rename the signal files out of the way, so that we don't accidentally
+	 * Remove the signal files out of the way, so that we don't accidentally
 	 * re-enter archive recovery mode in a subsequent crash.
 	 */
-	if (unlink(StandbySignalFile) != 0 && standby_signal_file_found)
-		ereport(ERROR,
-			(errcode_for_file_access(),
-			 errmsg("could not remove file \"%s\": %m",
-					StandbySignalFile)));
-	if (unlink(RecoverySignalFile) != 0 && recovery_signal_file_found)
-		ereport(ERROR,
-			(errcode_for_file_access(),
-			 errmsg("could not remove file \"%s\": %m",
-					RecoverySignalFile)));
+	if (standby_signal_file_found &&
+		durable_unlink(StandbySignalFile, FATAL) != 0)
+			ereport(FATAL,
+				(errcode_for_file_access(),
+				 errmsg("could not remove file \"%s\": %m",
+						StandbySignalFile)));
+
+	if (recovery_signal_file_found &&
+		durable_unlink(RecoverySignalFile, FATAL) != 0)
+			ereport(FATAL,
+				(errcode_for_file_access(),
+				 errmsg("could not remove file \"%s\": %m",
+						RecoverySignalFile)));
 
 	ereport(LOG,
 			(errmsg("archive recovery complete")));
