@@ -228,6 +228,8 @@
 				# number of seconds; 0 disables
 
 # - Archive Recovery -
+# These are only used in recovery mode
+
 #restore_command = ''		# command to use to restore an archived logfile segment
 				# placeholders: %p = path of file to restore
 				#               %f = file name only

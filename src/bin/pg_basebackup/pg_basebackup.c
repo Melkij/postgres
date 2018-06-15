@@ -349,7 +349,8 @@ usage(void)
 	printf(_("  -r, --max-rate=RATE    maximum transfer rate to transfer data directory\n"
 			 "                         (in kB/s, or use suffix \"k\" or \"M\")\n"));
 	printf(_("  -R, --write-recovery-conf\n"
-			 "                         append replication config to " PG_AUTOCONF_FILENAME "\n"));
+			 "                         append replication config to " PG_AUTOCONF_FILENAME "\n"
+			 "                         and place " STANDBY_SIGNAL_FILE " file\n"));
 	printf(_("  -T, --tablespace-mapping=OLDDIR=NEWDIR\n"
 			 "                         relocate tablespace in OLDDIR to NEWDIR\n"));
 	printf(_("      --waldir=WALDIR    location for the write-ahead log directory\n"));

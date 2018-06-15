@@ -192,12 +192,10 @@ ProcessConfigFileInternal(GucContext context, bool applySettings, int elevel)
 	}
 
 	/*
-	 * Read automatically generated configuration files.  Because these files
-	 * are in the data directory, we can't read them until the DataDir has
-	 * been set.
-	 *
 	 * Parse the PG_AUTOCONF_FILENAME file, if present, after the main file to
-	 * replace any parameters set by ALTER SYSTEM command.
+	 * replace any parameters set by ALTER SYSTEM command.  Because this file
+	 * is in the data directory, we can't read it until the DataDir has been
+	 * set.
 	 */
 	if (DataDir)
 	{
