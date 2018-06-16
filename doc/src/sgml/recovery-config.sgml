@@ -37,9 +37,9 @@
     <xref linkend="standby-settings"/> sections. Parameters from
     <xref linkend="recovery-target-settings"/> will not be used.
    </para>
-   
+
    <para>
-    To start the server in targeted recovery create a zero-length file called
+    To start the server in targeted recovery create a file called
     <filename>recovery.signal</filename><indexterm><primary>recovery.signal</primary></indexterm>
     in the data directory.
     If both <filename>standby.signal</filename> and <filename>recovery.signal</filename> files are
@@ -55,13 +55,6 @@
 
     <title>Archive Recovery Settings</title>
      <variablelist>
-
-     <para>
-      Parameter settings may be changed in <filename>postgresql.conf</filename> or
-      by executing the <command>ALTER SYSTEM</command>. Changes will take some
-      time to take effect, so changes made while not in paused state may not
-      have the desired effect in all cases.
-     </para>
 
      <varlistentry id="restore-command" xreflabel="restore_command">
       <term><varname>restore_command</varname> (<type>string</type>)
@@ -189,13 +182,6 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
       <varname>recovery_target_timeline</varname> and <varname>recovery_target_action</varname>.
      </para>
 
-     <para>
-      Parameter settings may be changed in <filename>postgresql.conf</filename> or
-      by executing the <command>ALTER SYSTEM</command>. Changes will take some
-      time to take effect, so changes made while not in paused state may not
-      have the desired effect in all cases.
-     </para>
-
      <variablelist>
       <varlistentry id="recovery-target-type" xreflabel="recovery_target_type">
        <term><varname>recovery_target_type</varname> (<type>enum</type>)
@@ -309,7 +295,7 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
         (<literal>false</literal>).
         Applies when <xref linkend="recovery-target-type"/> is specified
         to <literal>lsn</literal>, <literal>timestamp</literal> or
-        <literal>xid</literal>. 
+        <literal>xid</literal>.
         This setting controls whether transactions
         having exactly the target WAL location (LSN), commit time, or transaction ID, respectively, will
         be included in the recovery.  Default is <literal>true</literal>.
@@ -373,11 +359,11 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
         since the last checkpoint next time it is started).
        </para>
        <para>
-        Note that because <filename>recovery.conf</filename> will not be renamed when
-        <varname>recovery_target_action</varname> is set to <literal>shutdown</literal>,
+        Note that because <filename>recovery.signal</filename> will not be
+        removed when <varname>recovery_target_action</varname> is set to <literal>shutdown</literal>,
         any subsequent start will end with immediate shutdown unless the
-        configuration is changed or the <filename>recovery.conf</filename> file is
-        removed manually.
+        configuration is changed or the <filename>recovery.signal</filename>
+        file is removed manually.
        </para>
        <para>
         This setting has no effect if no recovery target is set.
@@ -449,6 +435,21 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
           (see <xref linkend="streaming-replication-slots"/>).
           This setting has no effect if <varname>primary_conninfo</varname> is not
           set.
+         </para>
+        </listitem>
+       </varlistentry>
+
+       <varlistentry id="promote-signal-file" xreflabel="promote_signal_file">
+        <term><varname>promote_signal_file</varname> (<type>string</type>)
+        <indexterm>
+          <primary><varname>promote_signal_file</varname> recovery parameter</primary>
+        </indexterm>
+        </term>
+        <listitem>
+         <para>
+          Specifies a trigger file whose presence ends recovery in the
+          standby.  Even if this value is not set, you can still promote
+          the standby using <command>pg_ctl promote</command>.
          </para>
         </listitem>
        </varlistentry>
