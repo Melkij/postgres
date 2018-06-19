@@ -11,10 +11,10 @@
 
    <para>
     This chapter describes the settings available in the
-    <filename>postgresql.conf</filename><indexterm><primary>postgresql.conf</primary></indexterm>
+    <filename>postgresql.conf</filename>
     file that apply only for the duration of the
     recovery.  They must be reset for any subsequent recovery you wish to
-    perform.
+    perform.  They cannot be changed once recovery has begun.
    </para>
 
    <para>

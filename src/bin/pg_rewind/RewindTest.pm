@@ -162,7 +162,7 @@ primary_conninfo='$connstr_master application_name=rewind_standby'
 recovery_target_timeline='latest'
 ));
 
-	$node_standby->request_standby();
+	$node_standby->request_standby_mode();
 
 	# Start standby
 	$node_standby->start;
@@ -272,7 +272,7 @@ primary_conninfo='port=$port_standby'
 recovery_target_timeline='latest'
 ));
 
-	$node_master->request_standby();
+	$node_master->request_standby_mode();
 
 	# Restart the master to check that rewind went correctly
 	$node_master->start;
