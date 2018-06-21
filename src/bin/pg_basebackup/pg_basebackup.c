@@ -980,7 +980,7 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 	bool		skip_file = false;
 	bool		is_postgresql_auto_conf = false;
 	bool		found_postgresql_auto_conf = false;
-	int 		file_padding_len = 0;
+	int			file_padding_len = 0;
 	size_t		tarhdrsz = 0;
 	pgoff_t		filesz = 0;
 
@@ -1137,6 +1137,7 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 				if (!found_postgresql_auto_conf)
 				{
 					int			padding;
+
 					tarCreateHeader(header, PG_AUTOCONF_FILENAME, NULL,
 									recoveryconfcontents->len,
 									pg_file_create_mode, 04000, 02000,
@@ -1151,7 +1152,7 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 				}
 
 				tarCreateHeader(header, STANDBY_SIGNAL_FILE, NULL,
-								0, /* zero-length file */
+								0,	/* zero-length file */
 								0600, 04000, 02000,
 								time(NULL));
 
@@ -1254,9 +1255,9 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 						/*
 						 * We have the complete header structure in tarhdr,
 						 * look at the file metadata: we may want append
-						 * recovery info into PG_AUTOCONF_FILENAME
-						 * and skip standby signal file
-						 * In both cases we must calculate tar padding
+						 * recovery info into PG_AUTOCONF_FILENAME and skip
+						 * standby signal file In both cases we must calculate
+						 * tar padding
 						 */
 						skip_file = (strcmp(&tarhdr[0], STANDBY_SIGNAL_FILE) == 0);
 						is_postgresql_auto_conf = (strcmp(&tarhdr[0], PG_AUTOCONF_FILENAME) == 0);
@@ -1284,8 +1285,8 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 							if (!skip_file)
 							{
 								/*
-								 * If we're not skipping the file, write the tar
-								 * header unmodified.
+								 * If we're not skipping the file, write the
+								 * tar header unmodified.
 								 */
 								WRITE_TAR_DATA(tarhdr, 512);
 							}
@@ -1319,16 +1320,18 @@ ReceiveTarFile(PGconn *conn, PGresult *res, int rownum)
 					else if (is_postgresql_auto_conf && writerecoveryconf)
 					{
 						/* append recovery conf to PG_AUTOCONF_FILENAME */
-						int padding;
-						int tailsize;
+						int			padding;
+						int			tailsize;
 
 						tailsize = (512 - file_padding_len) + recoveryconfcontents->len;
 						padding = ((tailsize + 511) & ~511) - tailsize;
 
 						WRITE_TAR_DATA(recoveryconfcontents->data, recoveryconfcontents->len);
 
-						if (padding) {
+						if (padding)
+						{
 							char		zerobuf[512];
+
 							MemSet(zerobuf, 0, sizeof(zerobuf));
 							WRITE_TAR_DATA(zerobuf, padding);
 						}

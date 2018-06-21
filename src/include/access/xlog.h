@@ -118,7 +118,7 @@ typedef enum
 	RECOVERY_TARGET_TIMELINE_CONTROLFILE,
 	RECOVERY_TARGET_TIMELINE_LATEST,
 	RECOVERY_TARGET_TIMELINE_NUMERIC
-} RecoveryTargetTimeLineGoal;
+}			RecoveryTargetTimeLineGoal;
 
 /* Max length of named restore points */
 #define MAXRESTOREPOINTNAMELEN 64
@@ -161,7 +161,7 @@ extern TransactionId recoveryTargetXid;
 extern TimestampTz recoveryTargetTime;
 extern char *recoveryTargetName;
 extern XLogRecPtr recoveryTargetLSN;
-extern int     recovery_min_apply_delay;
+extern int	recovery_min_apply_delay;
 
 /* option set locally in Startup process only when signal files exist */
 extern bool StandbyModeRequested;

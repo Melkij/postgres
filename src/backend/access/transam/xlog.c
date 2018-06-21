@@ -250,8 +250,8 @@ static int	LocalXLogInsertAllowed = -1;
 bool		ArchiveRecoveryRequested = false;
 bool		InArchiveRecovery = false;
 
-static bool   standby_signal_file_found = false;
-static bool   recovery_signal_file_found = false;
+static bool standby_signal_file_found = false;
+static bool recovery_signal_file_found = false;
 
 /* Was the last xlog file restored from archive, or local? */
 static bool restoredFromArchive = false;
@@ -261,32 +261,32 @@ static char *replay_image_masked = NULL;
 static char *master_image_masked = NULL;
 
 /* options formerly taken from recovery.conf for archive recovery */
-char *recoveryRestoreCommand = NULL;
-char *recoveryEndCommand = NULL;
-char *archiveCleanupCommand = NULL;
+char	   *recoveryRestoreCommand = NULL;
+char	   *recoveryEndCommand = NULL;
+char	   *archiveCleanupCommand = NULL;
 RecoveryTargetType recoveryTarget = RECOVERY_TARGET_UNSET;
-char *recoveryTargetTypeString;
-char *recoveryTargetValue = NULL;
-bool recoveryTargetInclusive = true;
+char	   *recoveryTargetTypeString;
+char	   *recoveryTargetValue = NULL;
+bool		recoveryTargetInclusive = true;
 RecoveryTargetAction recoveryTargetAction = RECOVERY_TARGET_ACTION_PAUSE;
 TransactionId recoveryTargetXid;
 TimestampTz recoveryTargetTime;
-char *recoveryTargetName;
-XLogRecPtr recoveryTargetLSN;
-int	recovery_min_apply_delay = 0;
+char	   *recoveryTargetName;
+XLogRecPtr	recoveryTargetLSN;
+int			recovery_min_apply_delay = 0;
 TimestampTz recoveryDelayUntilTime;
 
 /* options formerly taken from recovery.conf for XLOG streaming */
-bool StandbyModeRequested = false;
-char *PrimaryConnInfo = NULL;
-char *PrimarySlotName = NULL;
+bool		StandbyModeRequested = false;
+char	   *PrimaryConnInfo = NULL;
+char	   *PrimarySlotName = NULL;
 
 /* are we currently in standby mode? */
 bool		StandbyMode = false;
 
-char *PromoteSignalFile = NULL;
-char RecoverySignalFile[MAXPGPATH];
-char StandbySignalFile[MAXPGPATH];
+char	   *PromoteSignalFile = NULL;
+char		RecoverySignalFile[MAXPGPATH];
+char		StandbySignalFile[MAXPGPATH];
 
 /* whether request for fast promotion has been made yet */
 static bool fast_promote = false;
@@ -329,10 +329,10 @@ static bool recoveryStopAfter;
  * file was created.)  During a sequential scan we do not allow this value
  * to decrease.
  */
-char *recoveryTargetTLIString = NULL;
+char	   *recoveryTargetTLIString = NULL;
 RecoveryTargetTimeLineGoal recoveryTargetTimeLineGoal = RECOVERY_TARGET_TIMELINE_CONTROLFILE;
-TimeLineID recoveryTargetTLIRequested = 0;
-TimeLineID recoveryTargetTLI = 0;
+TimeLineID	recoveryTargetTLIRequested = 0;
+TimeLineID	recoveryTargetTLI = 0;
 static bool recoveryTargetIsLatest = false;
 static List *expectedTLEs;
 static TimeLineID curFileTLI;
@@ -4520,7 +4520,7 @@ ReadControlFile(void)
 					 errmsg("could not read from control file: %m")));
 		else
 			ereport(PANIC,
-					 (errmsg("could not read from control file: read %d bytes, expected %d", r, (int) sizeof(ControlFileData))));
+					(errmsg("could not read from control file: read %d bytes, expected %d", r, (int) sizeof(ControlFileData))));
 	}
 	pgstat_report_wait_end();
 
@@ -5261,9 +5261,9 @@ readRecoverySignalFile(void)
 	 */
 	if (stat(RECOVERY_COMMAND_FILE, &stat_buf) == 0)
 		ereport(FATAL,
-			(errcode_for_file_access(),
-			 errmsg("deprecated API using recovery command file \"%s\"",
-					RECOVERY_COMMAND_FILE)));
+				(errcode_for_file_access(),
+				 errmsg("deprecated API using recovery command file \"%s\"",
+						RECOVERY_COMMAND_FILE)));
 
 	/*
 	 * Remove unused .done file, if present. Ignore if absent.
@@ -5271,15 +5271,15 @@ readRecoverySignalFile(void)
 	unlink(RECOVERY_COMMAND_DONE);
 
 	/*
-	 * Check for recovery signal files and if found, fsync them
-	 * since they represent server state information.
+	 * Check for recovery signal files and if found, fsync them since they
+	 * represent server state information.
 	 *
-	 * If present, standby signal file takes precedence.
-	 * If neither is present then we won't enter archive recovery.
+	 * If present, standby signal file takes precedence. If neither is present
+	 * then we won't enter archive recovery.
 	 */
 	if (stat(StandbySignalFile, &stat_buf) == 0)
 	{
-		int         fd;
+		int			fd;
 
 		fd = BasicOpenFilePerm(StandbySignalFile, O_RDWR | PG_BINARY | get_sync_bit(sync_method),
 							   S_IRUSR | S_IWUSR);
@@ -5289,7 +5289,7 @@ readRecoverySignalFile(void)
 	}
 	else if (stat(RecoverySignalFile, &stat_buf) == 0)
 	{
-		int         fd;
+		int			fd;
 
 		fd = BasicOpenFilePerm(RecoverySignalFile, O_RDWR | PG_BINARY | get_sync_bit(sync_method),
 							   S_IRUSR | S_IWUSR);
@@ -5320,7 +5320,7 @@ readRecoverySignalFile(void)
 	if (StandbyModeRequested && !IsUnderPostmaster)
 		ereport(FATAL,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			errmsg("standby mode is not supported by single-user servers")));
+				 errmsg("standby mode is not supported by single-user servers")));
 
 	logRecoveryParameters();
 	validateRecoveryParameters();
@@ -5329,37 +5329,37 @@ readRecoverySignalFile(void)
 void
 logRecoveryParameters(void)
 {
-	int	normal_log_level = DEBUG2;
+	int			normal_log_level = DEBUG2;
 
 	/*
 	 * Log messages for recovery parameters at server start
 	 */
 	ereport(normal_log_level,
-		(errmsg_internal("standby_mode = '%s'", (StandbyModeRequested ? "on" : "off"))));
+			(errmsg_internal("standby_mode = '%s'", (StandbyModeRequested ? "on" : "off"))));
 
 	if (recoveryRestoreCommand != NULL)
 		ereport(normal_log_level,
-			(errmsg_internal("restore_command = '%s'", recoveryRestoreCommand)));
+				(errmsg_internal("restore_command = '%s'", recoveryRestoreCommand)));
 
 	if (recoveryEndCommand != NULL)
 		ereport(normal_log_level,
-			(errmsg_internal("recovery_end_command = '%s'", recoveryEndCommand)));
+				(errmsg_internal("recovery_end_command = '%s'", recoveryEndCommand)));
 
 	if (archiveCleanupCommand != NULL)
 		ereport(normal_log_level,
-			(errmsg_internal("archive_cleanup_command = '%s'", archiveCleanupCommand)));
+				(errmsg_internal("archive_cleanup_command = '%s'", archiveCleanupCommand)));
 
 	if (PrimaryConnInfo != NULL)
 		ereport(normal_log_level,
-			(errmsg_internal("primary_conninfo = '%s'", PrimaryConnInfo)));
+				(errmsg_internal("primary_conninfo = '%s'", PrimaryConnInfo)));
 
 	if (PrimarySlotName != NULL)
 		ereport(normal_log_level,
-			(errmsg_internal("primary_slot_name = '%s'", PrimarySlotName)));
+				(errmsg_internal("primary_slot_name = '%s'", PrimarySlotName)));
 
 	if (recovery_min_apply_delay > 0)
 		ereport(normal_log_level,
-			(errmsg_internal("recovery_min_apply_delay = '%u'", recovery_min_apply_delay)));
+				(errmsg_internal("recovery_min_apply_delay = '%u'", recovery_min_apply_delay)));
 
 	/*
 	 * Check details for recovery target, if any
@@ -5367,31 +5367,31 @@ logRecoveryParameters(void)
 	if (recoveryTarget > RECOVERY_TARGET_UNSET)
 	{
 		ereport(normal_log_level,
-			(errmsg_internal("recovery_target_type = '%s'", RecoveryTargetText(recoveryTarget))));
+				(errmsg_internal("recovery_target_type = '%s'", RecoveryTargetText(recoveryTarget))));
 		if (recoveryTargetValue != NULL)
 			ereport(normal_log_level,
-				(errmsg_internal("recovery_target_value = '%s'", recoveryTargetValue)));
+					(errmsg_internal("recovery_target_value = '%s'", recoveryTargetValue)));
 		ereport(normal_log_level,
-			(errmsg_internal("recovery_target_inclusive = '%s'", (recoveryTargetInclusive ? "on " : "off"))));
+				(errmsg_internal("recovery_target_inclusive = '%s'", (recoveryTargetInclusive ? "on " : "off"))));
 
 		if (recoveryTargetTimeLineGoal == RECOVERY_TARGET_TIMELINE_CONTROLFILE)
 			ereport(normal_log_level,
-				(errmsg_internal("recovery_target_timeline = '%u' (from controlfile)",
-					recoveryTargetTLI)));
+					(errmsg_internal("recovery_target_timeline = '%u' (from controlfile)",
+									 recoveryTargetTLI)));
 		else if (recoveryTargetTimeLineGoal == RECOVERY_TARGET_TIMELINE_LATEST)
 			ereport(normal_log_level,
-				(errmsg_internal("recovery_target_timeline = 'latest'")));
+					(errmsg_internal("recovery_target_timeline = 'latest'")));
 		else
 		{
 			Assert(recoveryTargetTimeLineGoal == RECOVERY_TARGET_TIMELINE_NUMERIC);
 			ereport(normal_log_level,
-				(errmsg_internal("recovery_target_timeline = '%u'",
-					recoveryTargetTLIRequested)));
+					(errmsg_internal("recovery_target_timeline = '%u'",
+									 recoveryTargetTLIRequested)));
 		}
 	}
 
 	ereport(normal_log_level,
-		(errmsg_internal("recovery_target_action = '%s'", RecoveryTargetActionText(recoveryTargetAction))));
+			(errmsg_internal("recovery_target_action = '%s'", RecoveryTargetActionText(recoveryTargetAction))));
 }
 
 void
@@ -5402,9 +5402,9 @@ validateRecoveryParameters(void)
 
 	if (recoveryTarget > RECOVERY_TARGET_UNSET &&
 		recoveryTargetValue == NULL)
-			ereport(FATAL,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					errmsg("must specify recovery_target_value when recovery_target_type is set")));
+		ereport(FATAL,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("must specify recovery_target_value when recovery_target_type is set")));
 
 	/*
 	 * Check for compulsory parameters
@@ -5441,7 +5441,7 @@ validateRecoveryParameters(void)
 	 */
 	if (recoveryTargetTimeLineGoal == RECOVERY_TARGET_TIMELINE_NUMERIC)
 	{
-		TimeLineID rtli = recoveryTargetTLIRequested;
+		TimeLineID	rtli = recoveryTargetTLIRequested;
 
 		/* Timeline 1 does not have a history file, all else should */
 		if (rtli != 1 && !existsTimeLineHistory(rtli))
@@ -5466,7 +5466,10 @@ validateRecoveryParameters(void)
 	}
 	else
 	{
-		/* else we just use the recoveryTargetTLI as already read from ControlFile */
+		/*
+		 * else we just use the recoveryTargetTLI as already read from
+		 * ControlFile
+		 */
 		Assert(recoveryTargetTimeLineGoal == RECOVERY_TARGET_TIMELINE_CONTROLFILE);
 		recoveryTargetIsLatest = false;
 	}
@@ -5575,14 +5578,14 @@ exitArchiveRecovery(TimeLineID endTLI, XLogRecPtr endOfLog)
 	 */
 	if (standby_signal_file_found &&
 		durable_unlink(StandbySignalFile, FATAL) != 0)
-			ereport(FATAL,
+		ereport(FATAL,
 				(errcode_for_file_access(),
 				 errmsg("could not remove file \"%s\": %m",
 						StandbySignalFile)));
 
 	if (recovery_signal_file_found &&
 		durable_unlink(RecoverySignalFile, FATAL) != 0)
-			ereport(FATAL,
+		ereport(FATAL,
 				(errcode_for_file_access(),
 				 errmsg("could not remove file \"%s\": %m",
 						RecoverySignalFile)));
@@ -6490,7 +6493,8 @@ StartupXLOG(void)
 		 * This can happen for example if a base backup is taken from a
 		 * running server using an atomic filesystem snapshot, without calling
 		 * pg_start/stop_backup. Or if you just kill a running master server
-		 * and put it into archive recovery by creating a recovery signal file.
+		 * and put it into archive recovery by creating a recovery signal
+		 * file.
 		 *
 		 * Our strategy in that case is to perform crash recovery first,
 		 * replaying all the WAL present in pg_wal, and only enter archive
@@ -11777,7 +11781,7 @@ WaitForWALToBecomeAvailable(XLogRecPtr RecPtr, bool randAccess,
 					 * that when we later jump backwards to start redo at
 					 * RedoStartLSN, we will have the logs streamed already.
 					 */
-					if (PrimaryConnInfo && strcmp(PrimaryConnInfo,"") != 0)
+					if (PrimaryConnInfo && strcmp(PrimaryConnInfo, "") != 0)
 					{
 						XLogRecPtr	ptr;
 						TimeLineID	tli;

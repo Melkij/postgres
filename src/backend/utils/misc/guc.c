@@ -10961,7 +10961,7 @@ assign_recovery_target_type(const char *newval, void *extra)
 static bool
 check_recovery_target_value(char **newval, void **extra, GucSource source)
 {
-	bool valid = false;
+	bool		valid = false;
 
 	/*
 	 * Value must be present in some cases, must not be present in others
@@ -10988,8 +10988,8 @@ check_recovery_target_value(char **newval, void **extra, GucSource source)
 	}
 
 	/*
-	 * We assume that recovery_target_type has already been parsed
-	 * since it sorts alphabetically before recovery_target_value.
+	 * We assume that recovery_target_type has already been parsed since it
+	 * sorts alphabetically before recovery_target_value.
 	 */
 	switch (recoveryTarget)
 	{
@@ -11000,15 +11000,15 @@ check_recovery_target_value(char **newval, void **extra, GucSource source)
 
 		case RECOVERY_TARGET_XID:
 			{
-				TransactionId	xid;
-				TransactionId	*myextra;
+				TransactionId xid;
+				TransactionId *myextra;
 
 				errno = 0;
 				xid = (TransactionId) strtoul(*newval, NULL, 0);
 				if (errno == EINVAL || errno == ERANGE)
 				{
 					GUC_check_errdetail("recovery_target_value is not a valid number: \"%s\"",
-								*newval);
+										*newval);
 					return false;
 				}
 
@@ -11020,16 +11020,16 @@ check_recovery_target_value(char **newval, void **extra, GucSource source)
 
 		case RECOVERY_TARGET_TIME:
 			{
-				TimestampTz     time;
-				TimestampTz     *myextra;
+				TimestampTz time;
+				TimestampTz *myextra;
 				MemoryContext oldcontext = CurrentMemoryContext;
 
 				PG_TRY();
 				{
 					time = DatumGetTimestampTz(DirectFunctionCall3(timestamptz_in,
-												CStringGetDatum(*newval),
-												ObjectIdGetDatum(InvalidOid),
-												Int32GetDatum(-1)));
+																   CStringGetDatum(*newval),
+																   ObjectIdGetDatum(InvalidOid),
+																   Int32GetDatum(-1)));
 				}
 				PG_CATCH();
 				{
@@ -11066,19 +11066,20 @@ check_recovery_target_value(char **newval, void **extra, GucSource source)
 		case RECOVERY_TARGET_LSN:
 			{
 				XLogRecPtr	lsn;
-				XLogRecPtr	*myextra;
+				XLogRecPtr *myextra;
 				MemoryContext oldcontext = CurrentMemoryContext;
 
 				/*
-				 * Convert the LSN string given by the user to XLogRecPtr form.
+				 * Convert the LSN string given by the user to XLogRecPtr
+				 * form.
 				 */
 				PG_TRY();
 				{
 					lsn =
 						DatumGetLSN(DirectFunctionCall3(pg_lsn_in,
-													CStringGetDatum(*newval),
-													ObjectIdGetDatum(InvalidOid),
-													Int32GetDatum(-1)));
+														CStringGetDatum(*newval),
+														ObjectIdGetDatum(InvalidOid),
+														Int32GetDatum(-1)));
 				}
 				PG_CATCH();
 				{
@@ -11209,7 +11210,7 @@ assign_recovery_target_action(const char *newval, void *extra)
 static bool
 check_primary_slot_name(char **newval, void **extra, GucSource source)
 {
-	if (strcmp(*newval,"") != 0 &&
+	if (strcmp(*newval, "") != 0 &&
 		!ReplicationSlotValidateName(*newval, WARNING))
 	{
 		GUC_check_errdetail("primary_slot_name is not valid: \"%s\"", *newval);

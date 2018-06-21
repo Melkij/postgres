@@ -325,7 +325,7 @@ pg_create_restore_point(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("value too long for restore point (maximum %d characters)",
-							MAXRESTOREPOINTNAMELEN - 1)));
+						MAXRESTOREPOINTNAMELEN - 1)));
 
 	restorepoint = XLogRestorePoint(restore_name_str);
 
