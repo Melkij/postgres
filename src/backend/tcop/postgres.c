@@ -2207,7 +2207,7 @@ errdetail_execute(List *raw_parsetree_list)
 /*
  * errdetail_log_params
  *
- * Add an errdetail() line showing bind-parameter data, if available.
+ * Add an errdetail_log() line showing bind-parameter data, if available.
  */
 static int
 errdetail_log_params(ParamListInfo params)
@@ -2915,8 +2915,7 @@ ProcessInterrupts(void)
 			ereport(FATAL,
 					(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
 					 errmsg("terminating connection due to conflict with recovery"),
-					 errdetail_recovery_conflict(),
-					 errdetail_log_params(debug_query_params)));
+					 errdetail_recovery_conflict()));
 		}
 		else if (RecoveryConflictPending)
 		{
@@ -2926,8 +2925,7 @@ ProcessInterrupts(void)
 			ereport(FATAL,
 					(errcode(ERRCODE_DATABASE_DROPPED),
 					 errmsg("terminating connection due to conflict with recovery"),
-					 errdetail_recovery_conflict(),
-					 errdetail_log_params(debug_query_params)));
+					 errdetail_recovery_conflict()));
 		}
 		else
 			ereport(FATAL,
@@ -2943,8 +2941,7 @@ ProcessInterrupts(void)
 		whereToSendOutput = DestNone;
 		ereport(FATAL,
 				(errcode(ERRCODE_CONNECTION_FAILURE),
-				 errmsg("connection to client lost"),
-				 errdetail_log_params(debug_query_params)));
+				 errmsg("connection to client lost")));
 	}
 
 	/*
@@ -3943,6 +3940,7 @@ PostgresMain(int argc, char *argv[],
 		 * the storage it points at.
 		 */
 		debug_query_string = NULL;
+		debug_query_params = NULL;
 
 		/*
 		 * Abort the current transaction in order to recover.
