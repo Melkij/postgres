@@ -1380,6 +1380,8 @@ PostgresNode.
 
 sub command_ok
 {
+	local $Test::Builder::Level = $Test::Builder::Level + 1;
+
 	my $self = shift;
 
 	local $ENV{PGPORT} = $self->port;
@@ -1398,6 +1400,8 @@ TestLib::command_fails with our PGPORT. See command_ok(...)
 
 sub command_fails
 {
+	local $Test::Builder::Level = $Test::Builder::Level + 1;
+
 	my $self = shift;
 
 	local $ENV{PGPORT} = $self->port;
@@ -1416,6 +1420,8 @@ TestLib::command_like with our PGPORT. See command_ok(...)
 
 sub command_like
 {
+	local $Test::Builder::Level = $Test::Builder::Level + 1;
+
 	my $self = shift;
 
 	local $ENV{PGPORT} = $self->port;
@@ -1434,6 +1440,8 @@ TestLib::command_checks_all with our PGPORT. See command_ok(...)
 
 sub command_checks_all
 {
+	local $Test::Builder::Level = $Test::Builder::Level + 1;
+
 	my $self = shift;
 
 	local $ENV{PGPORT} = $self->port;
@@ -1456,6 +1464,8 @@ The log file is truncated prior to running the command, however.
 
 sub issues_sql_like
 {
+	local $Test::Builder::Level = $Test::Builder::Level + 1;
+
 	my ($self, $cmd, $expected_sql, $test_name) = @_;
 
 	local $ENV{PGPORT} = $self->port;
