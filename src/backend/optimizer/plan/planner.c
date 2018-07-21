@@ -335,7 +335,6 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	 */
 	if ((cursorOptions & CURSOR_OPT_PARALLEL_OK) != 0 &&
 		IsUnderPostmaster &&
-		dynamic_shared_memory_type != DSM_IMPL_NONE &&
 		parse->commandType == CMD_SELECT &&
 		!parse->hasModifyingCTE &&
 		max_parallel_workers_per_gather > 0 &&
@@ -4604,8 +4603,7 @@ create_one_window_path(PlannerInfo *root,
 		path = (Path *)
 			create_windowagg_path(root, window_rel, path, window_target,
 								  wflists->windowFuncs[wc->winref],
-								  wc,
-								  window_pathkeys);
+								  wc);
 	}
 
 	add_path(window_rel, path);
@@ -5466,8 +5464,6 @@ make_window_input_target(PlannerInfo *root,
  * The required ordering is first the PARTITION keys, then the ORDER keys.
  * In the future we might try to implement windowing using hashing, in which
  * case the ordering could be relaxed, but for now we always sort.
- *
- * Caution: if you change this, see createplan.c's get_column_info_for_window!
  */
 static List *
 make_pathkeys_for_window(PlannerInfo *root, WindowClause *wc,
@@ -6050,8 +6046,7 @@ plan_create_index_workers(Oid tableOid, Oid indexOid)
 	double		allvisfrac;
 
 	/* Return immediately when parallelism disabled */
-	if (dynamic_shared_memory_type == DSM_IMPL_NONE ||
-		max_parallel_maintenance_workers == 0)
+	if (max_parallel_maintenance_workers == 0)
 		return 0;
 
 	/* Set up largely-dummy planner state */
@@ -6913,8 +6908,8 @@ apply_scanjoin_target_to_paths(PlannerInfo *root,
 							  scanjoin_targets_contain_srfs);
 
 	/*
-	 * If the relation is partitioned, recurseively apply the same changes to
-	 * all partitions and generate new Append paths. Since Append is not
+	 * If the relation is partitioned, recursively apply the same changes to
+	 * all partitions and generate new Append paths.  Since Append is not
 	 * projection-capable, that might save a separate Result node, and it also
 	 * is important for partitionwise aggregate.
 	 */

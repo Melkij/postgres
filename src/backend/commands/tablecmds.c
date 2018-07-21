@@ -1422,7 +1422,7 @@ ExecuteTruncateGuts(List *explicit_rels, List *relids, List *relids_logged,
 	Oid		   *logrelids;
 
 	/*
-	 * Open, exclusive-lock, and check all the explicitly-specified relations
+	 * Check the explicitly-specified relations.
 	 *
 	 * In CASCADE mode, suck in all referencing relations as well.  This
 	 * requires multiple iterations to find indirectly-dependent relations. At
@@ -6554,14 +6554,21 @@ ATExecSetStatistics(Relation rel, const char *colName, int16 colNum, Node *newVa
 				 errmsg("cannot alter system column \"%s\"",
 						colName)));
 
-	if ((rel->rd_rel->relkind == RELKIND_INDEX ||
-		 rel->rd_rel->relkind == RELKIND_PARTITIONED_INDEX) &&
-		rel->rd_index->indkey.values[attnum - 1] != 0)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot alter statistics on non-expression column \"%s\" of index \"%s\"",
-						NameStr(attrtuple->attname), RelationGetRelationName(rel)),
-				 errhint("Alter statistics on table column instead.")));
+	if (rel->rd_rel->relkind == RELKIND_INDEX ||
+		rel->rd_rel->relkind == RELKIND_PARTITIONED_INDEX)
+	{
+		if (attnum > rel->rd_index->indnkeyatts)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot alter statistics on included column \"%s\" of index \"%s\"",
+							NameStr(attrtuple->attname), RelationGetRelationName(rel))));
+		else if (rel->rd_index->indkey.values[attnum - 1] != 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("cannot alter statistics on non-expression column \"%s\" of index \"%s\"",
+							NameStr(attrtuple->attname), RelationGetRelationName(rel)),
+					 errhint("Alter statistics on table column instead.")));
+	}
 
 	attrtuple->attstattarget = newtarget;
 
@@ -13671,21 +13678,6 @@ transformPartitionSpec(Relation rel, PartitionSpec *partspec, char *strategy)
 	foreach(l, partspec->partParams)
 	{
 		PartitionElem *pelem = castNode(PartitionElem, lfirst(l));
-		ListCell   *lc;
-
-		/* Check for PARTITION BY ... (foo, foo) */
-		foreach(lc, newspec->partParams)
-		{
-			PartitionElem *pparam = castNode(PartitionElem, lfirst(lc));
-
-			if (pelem->name && pparam->name &&
-				strcmp(pelem->name, pparam->name) == 0)
-				ereport(ERROR,
-						(errcode(ERRCODE_DUPLICATE_COLUMN),
-						 errmsg("column \"%s\" appears more than once in partition key",
-								pelem->name),
-						 parser_errposition(pstate, pelem->location)));
-		}
 
 		if (pelem->expr)
 		{
