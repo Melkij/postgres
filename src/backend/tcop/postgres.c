@@ -1774,6 +1774,7 @@ exec_bind_message(StringInfo input_message)
 			params->params[paramno].pflags = PARAM_FLAG_CONST;
 			params->params[paramno].ptype = ptype;
 		}
+		debug_query_params = params;
 	}
 	else
 		params = NULL;
@@ -1861,6 +1862,7 @@ exec_bind_message(StringInfo input_message)
 		ShowUsage("BIND MESSAGE STATISTICS");
 
 	debug_query_string = NULL;
+	debug_query_params = NULL;
 }
 
 /*
