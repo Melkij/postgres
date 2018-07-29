@@ -33,6 +33,7 @@
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
+#include "utils/float.h"
 
 /*
  * gcc's -ffast-math switch breaks routines that expect exact results from
@@ -480,8 +481,8 @@ parse_sane_timezone(struct pg_tm *tm, text *zone)
 	if (isdigit((unsigned char) *tzname))
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("invalid input syntax for numeric time zone: \"%s\"",
-						tzname),
+				 errmsg("invalid input syntax for type %s: \"%s\"",
+						"numeric time zone", tzname),
 				 errhint("Numeric time zones must have \"-\" or \"+\" as first character.")));
 
 	rt = DecodeTimezone(tzname, &tz);
