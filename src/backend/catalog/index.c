@@ -557,12 +557,7 @@ AppendAttributeTuples(Relation indexRelation, int numatts)
 	{
 		Form_pg_attribute attr = TupleDescAttr(indexTupDesc, i);
 
-		/*
-		 * There used to be very grotty code here to set these fields, but I
-		 * think it's unnecessary.  They should be set already.
-		 */
 		Assert(attr->attnum == i + 1);
-		Assert(attr->attcacheoff == -1);
 
 		InsertPgAttributeTuple(pg_attribute, attr, indstate);
 	}
@@ -977,6 +972,12 @@ index_create(Relation heapRelation,
 						(constr_flags & INDEX_CONSTR_CREATE_DEFERRABLE) == 0,
 						!concurrent && !invalid,
 						!concurrent);
+
+	/*
+	 * Register relcache invalidation on the indexes' heap relation, to
+	 * maintain consistency of its index list
+	 */
+	CacheInvalidateRelcache(heapRelation);
 
 	/* update pg_inherits, if needed */
 	if (OidIsValid(parentIndexRelid))

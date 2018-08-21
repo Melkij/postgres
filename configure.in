@@ -358,6 +358,7 @@ case $template in
 esac
 
 AC_PROG_CC([$pgac_cc_list])
+AC_PROG_CC_C99()
 AC_PROG_CXX([$pgac_cxx_list])
 
 # Check if it's Intel's compiler, which (usually) pretends to be gcc,
@@ -1101,12 +1102,6 @@ AC_SEARCH_LIBS(setproctitle, util)
 AC_SEARCH_LIBS(dlopen, dl)
 AC_SEARCH_LIBS(socket, [socket ws2_32])
 AC_SEARCH_LIBS(shl_load, dld)
-# We only use libld in port/dynloader/aix.c
-case $host_os in
-     aix*)
-	AC_SEARCH_LIBS(ldopen, ld)
-	;;
-esac
 AC_SEARCH_LIBS(getopt_long, [getopt gnugetopt])
 AC_SEARCH_LIBS(crypt, crypt)
 AC_SEARCH_LIBS(shm_open, rt)
@@ -1260,7 +1255,7 @@ AC_SUBST(UUID_LIBS)
 
 AC_HEADER_STDBOOL
 
-AC_CHECK_HEADERS([atomic.h crypt.h dld.h fp_class.h getopt.h ieeefp.h ifaddrs.h langinfo.h mbarrier.h poll.h sys/epoll.h sys/ipc.h sys/prctl.h sys/procctl.h sys/pstat.h sys/resource.h sys/select.h sys/sem.h sys/shm.h sys/sockio.h sys/tas.h sys/un.h termios.h ucred.h utime.h wchar.h wctype.h])
+AC_CHECK_HEADERS([atomic.h crypt.h fp_class.h getopt.h ieeefp.h ifaddrs.h langinfo.h mbarrier.h poll.h sys/epoll.h sys/ipc.h sys/prctl.h sys/procctl.h sys/pstat.h sys/resource.h sys/select.h sys/sem.h sys/shm.h sys/sockio.h sys/tas.h sys/un.h termios.h ucred.h utime.h wchar.h wctype.h])
 
 # On BSD, test for net/if.h will fail unless sys/socket.h
 # is included first.
@@ -1805,7 +1800,7 @@ for the exact reason.]])],
 # Run tests below here
 # --------------------
 
-# Force use of our snprintf if system's doesn't do arg control
+# For NLS, force use of our snprintf if system's doesn't do arg control.
 # See comment above at snprintf test for details.
 if test "$enable_nls" = yes -a "$pgac_need_repl_snprintf" = no; then
   PGAC_FUNC_SNPRINTF_ARG_CONTROL
@@ -1853,6 +1848,15 @@ AC_DEFINE_UNQUOTED(INT64_MODIFIER, $INT64_MODIFIER,
 if test "$pgac_need_repl_snprintf" = no; then
   PGAC_FUNC_SNPRINTF_SIZE_T_SUPPORT
   if test "$pgac_cv_snprintf_size_t_support" != yes; then
+    pgac_need_repl_snprintf=yes
+  fi
+fi
+
+# Force use of our snprintf if the system's doesn't handle buffer overrun
+# as specified by C99.
+if test "$pgac_need_repl_snprintf" = no; then
+  PGAC_FUNC_SNPRINTF_C99_RESULT
+  if test "$pgac_cv_snprintf_c99_result" != yes; then
     pgac_need_repl_snprintf=yes
   fi
 fi

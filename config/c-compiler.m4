@@ -19,10 +19,16 @@ fi])# PGAC_C_SIGNED
 
 # PGAC_C_PRINTF_ARCHETYPE
 # -----------------------
-# Set the format archetype used by gcc to check printf type functions.  We
-# prefer "gnu_printf", which includes what glibc uses, such as %m for error
-# strings and %lld for 64 bit long longs.  GCC 4.4 introduced it.  It makes a
-# dramatic difference on Windows.
+# Select the format archetype to be used by gcc to check printf-type functions.
+# We prefer "gnu_printf", which matches the features glibc supports, notably
+# %m, 'z' and 'll' width modifiers ('ll' only matters if int64 requires it),
+# and argument order control if we're doing --enable-nls.  On platforms where
+# the native printf doesn't have 'z'/'ll' or arg control, we replace it with
+# src/port/snprintf.c which does, so that the only potential mismatch here is
+# whether or not %m is supported.  We need that for elog/ereport, so we live
+# with the fact that erroneous use of %m in plain printf calls won't be
+# detected.  (It appears that many versions of gcc/clang wouldn't report it
+# even if told to check according to plain printf archetype, anyway.)
 AC_DEFUN([PGAC_PRINTF_ARCHETYPE],
 [AC_CACHE_CHECK([for printf format archetype], pgac_cv_printf_archetype,
 [ac_save_c_werror_flag=$ac_c_werror_flag
