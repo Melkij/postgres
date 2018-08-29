@@ -12360,7 +12360,7 @@ SELECT setval('foo', 42, false);    <lineannotation>Next <function>nextval</func
   <tip>
    <para>
     If your needs go beyond the capabilities of these conditional
-    expressions, you might want to consider writing a stored procedure
+    expressions, you might want to consider writing a server-side function
     in a more expressive programming language.
    </para>
   </tip>
@@ -17933,7 +17933,7 @@ SELECT collation for ('foo' COLLATE "de_DE");
       </row>
       <row>
        <entry><literal><function>txid_status(<parameter>bigint</parameter>)</function></literal></entry>
-       <entry><type>txid_status</type></entry>
+       <entry><type>text</type></entry>
        <entry>report the status of the given transaction: <literal>committed</literal>, <literal>aborted</literal>, <literal>in progress</literal>, or null if the transaction ID is too old</entry>
       </row>
      </tbody>
@@ -20594,7 +20594,7 @@ SELECT (pg_stat_file('filename')).modification;
 <programlisting>
 CREATE TRIGGER z_min_update
 BEFORE UPDATE ON tablename
-FOR EACH ROW EXECUTE PROCEDURE suppress_redundant_updates_trigger();
+FOR EACH ROW EXECUTE FUNCTION suppress_redundant_updates_trigger();
 </programlisting>
       In most cases, you would want to fire this trigger last for each row.
       Bearing in mind that triggers fire in name order, you would then
@@ -20846,7 +20846,7 @@ END
 $$;
 CREATE EVENT TRIGGER test_event_trigger_for_drops
    ON sql_drop
-   EXECUTE PROCEDURE test_event_trigger_for_drops();
+   EXECUTE FUNCTION test_event_trigger_for_drops();
 </programlisting>
     </para>
   </sect2>
@@ -20911,7 +20911,7 @@ $$;
 
 CREATE EVENT TRIGGER test_table_rewrite_oid
                   ON table_rewrite
-   EXECUTE PROCEDURE test_event_trigger_table_rewrite_oid();
+   EXECUTE FUNCTION test_event_trigger_table_rewrite_oid();
 </programlisting>
     </para>
   </sect2>

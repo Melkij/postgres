@@ -38,13 +38,13 @@ static const char *progname;
 static void
 usage()
 {
-	printf(_("%s verifies page level checksums in offline PostgreSQL database cluster.\n\n"), progname);
+	printf(_("%s verifies data checksums in a PostgreSQL database cluster.\n\n"), progname);
 	printf(_("Usage:\n"));
-	printf(_("  %s [OPTION] [DATADIR]\n"), progname);
+	printf(_("  %s [OPTION]... [DATADIR]\n"), progname);
 	printf(_("\nOptions:\n"));
 	printf(_(" [-D, --pgdata=]DATADIR  data directory\n"));
-	printf(_("  -r relfilenode         check only relation with specified relfilenode\n"));
-	printf(_("  -d                     debug output, listing all checked blocks\n"));
+	printf(_("  -d                     debug output, list all checked blocks\n"));
+	printf(_("  -r RELFILENODE         check only relation with specified relfilenode\n"));
 	printf(_("  -V, --version          output version information, then exit\n"));
 	printf(_("  -?, --help             show this help, then exit\n"));
 	printf(_("\nIf no data directory (DATADIR) is specified, "
@@ -177,7 +177,7 @@ scan_directory(char *basedir, char *subdir)
 				segmentno = atoi(segmentpath);
 				if (segmentno == 0)
 				{
-					fprintf(stderr, _("%s: invalid segment number %d in filename \"%s\"\n"),
+					fprintf(stderr, _("%s: invalid segment number %d in file name \"%s\"\n"),
 							progname, segmentno, fn);
 					exit(1);
 				}
@@ -247,7 +247,7 @@ main(int argc, char *argv[])
 			case 'r':
 				if (atoi(optarg) <= 0)
 				{
-					fprintf(stderr, _("%s: invalid relfilenode: %s\n"), progname, optarg);
+					fprintf(stderr, _("%s: invalid relfilenode specification, must be numeric: %s\n"), progname, optarg);
 					exit(1);
 				}
 				only_relfilenode = pstrdup(optarg);
@@ -288,20 +288,20 @@ main(int argc, char *argv[])
 	ControlFile = get_controlfile(DataDir, progname, &crc_ok);
 	if (!crc_ok)
 	{
-		fprintf(stderr, _("%s: pg_control CRC value is incorrect.\n"), progname);
+		fprintf(stderr, _("%s: pg_control CRC value is incorrect\n"), progname);
 		exit(1);
 	}
 
 	if (ControlFile->state != DB_SHUTDOWNED &&
 		ControlFile->state != DB_SHUTDOWNED_IN_RECOVERY)
 	{
-		fprintf(stderr, _("%s: cluster must be shut down to verify checksums.\n"), progname);
+		fprintf(stderr, _("%s: cluster must be shut down to verify checksums\n"), progname);
 		exit(1);
 	}
 
 	if (ControlFile->data_checksum_version == 0)
 	{
-		fprintf(stderr, _("%s: data checksums are not enabled in cluster.\n"), progname);
+		fprintf(stderr, _("%s: data checksums are not enabled in cluster\n"), progname);
 		exit(1);
 	}
 
@@ -312,9 +312,9 @@ main(int argc, char *argv[])
 
 	printf(_("Checksum scan completed\n"));
 	printf(_("Data checksum version: %d\n"), ControlFile->data_checksum_version);
-	printf(_("Files scanned:  %" INT64_MODIFIER "d\n"), files);
-	printf(_("Blocks scanned: %" INT64_MODIFIER "d\n"), blocks);
-	printf(_("Bad checksums:  %" INT64_MODIFIER "d\n"), badblocks);
+	printf(_("Files scanned:  %s\n"), psprintf(INT64_FORMAT, files));
+	printf(_("Blocks scanned: %s\n"), psprintf(INT64_FORMAT, blocks));
+	printf(_("Bad checksums:  %s\n"), psprintf(INT64_FORMAT, badblocks));
 
 	if (badblocks > 0)
 		return 1;

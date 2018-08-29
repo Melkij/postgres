@@ -142,6 +142,10 @@
    `LLVMCreatePerfJITEventListener', and to 0 if you don't. */
 #undef HAVE_DECL_LLVMCREATEPERFJITEVENTLISTENER
 
+/* Define to 1 if you have the declaration of `LLVMGetHostCPUFeatures', and to
+   0 if you don't. */
+#undef HAVE_DECL_LLVMGETHOSTCPUFEATURES
+
 /* Define to 1 if you have the declaration of `LLVMGetHostCPUName', and to 0
    if you don't. */
 #undef HAVE_DECL_LLVMGETHOSTCPUNAME
@@ -753,9 +757,6 @@
 
 /* Define to 1 if your compiler understands _Static_assert. */
 #undef HAVE__STATIC_ASSERT
-
-/* Define to 1 if your compiler understands __VA_ARGS__ in macros. */
-#undef HAVE__VA_ARGS
 
 /* Define to 1 if you have the `__strtoll' function. */
 #undef HAVE___STRTOLL
