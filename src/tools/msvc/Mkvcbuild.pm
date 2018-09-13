@@ -98,7 +98,7 @@ sub mkvcbuild
 	  erand48.c snprintf.c strlcat.c strlcpy.c dirmod.c noblock.c path.c
 	  pg_strong_random.c pgcheckdir.c pgmkdirp.c pgsleep.c pgstrcasecmp.c
 	  pqsignal.c mkdtemp.c qsort.c qsort_arg.c quotes.c system.c
-	  sprompt.c tar.c thread.c getopt.c getopt_long.c dirent.c
+	  sprompt.c tar.c thread.c getopt.c getopt_long.c dirent.c dlopen.c
 	  win32env.c win32error.c win32security.c win32setlocale.c);
 
 	push(@pgportfiles, 'rint.c') if ($vsVersion < '12.00');
@@ -116,7 +116,8 @@ sub mkvcbuild
 
 	our @pgcommonallfiles = qw(
 	  base64.c config_info.c controldata_utils.c exec.c file_perm.c ip.c
-	  keywords.c md5.c pg_lzcompress.c pgfnames.c psprintf.c relpath.c rmtree.c
+	  keywords.c link-canary.c md5.c
+	  pg_lzcompress.c pgfnames.c psprintf.c relpath.c rmtree.c
 	  saslprep.c scram-common.c string.c unicode_norm.c username.c
 	  wait_error.c);
 
@@ -155,9 +156,6 @@ sub mkvcbuild
 	$postgres->AddIncludeDir('src/backend');
 	$postgres->AddDir('src/backend/port/win32');
 	$postgres->AddFile('src/backend/utils/fmgrtab.c');
-	$postgres->ReplaceFile(
-		'src/backend/port/dynloader.c',
-		'src/backend/port/dynloader/win32.c');
 	$postgres->ReplaceFile('src/backend/port/pg_sema.c',
 		'src/backend/port/win32_sema.c');
 	$postgres->ReplaceFile('src/backend/port/pg_shmem.c',

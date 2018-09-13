@@ -347,15 +347,18 @@ extern int	isinf(double x);
 /*
  * Glibc doesn't use the builtin for clang due to a *gcc* bug in a version
  * newer than the gcc compatibility clang claims to have. This would cause a
- * *lot* of superfluous function calls, therefore revert when using clang.
+ * *lot* of superfluous function calls, therefore revert when using clang. In
+ * C++ there's issues with libc++ (not libstdc++), so disable as well.
  */
-#ifdef __clang__
+#if defined(__clang__) && !defined(__cplusplus)
 /* needs to be separate to not confuse other compilers */
 #if __has_builtin(__builtin_isinf)
+/* need to include before, to avoid getting overwritten */
+#include <math.h>
 #undef isinf
 #define isinf __builtin_isinf
 #endif							/* __has_builtin(isinf) */
-#endif							/* __clang__ */
+#endif							/* __clang__ && !__cplusplus*/
 #endif							/* !HAVE_ISINF */
 
 #ifndef HAVE_MKDTEMP
@@ -398,6 +401,29 @@ extern void srandom(unsigned int seed);
 
 #ifndef HAVE_SSL_GET_CURRENT_COMPRESSION
 #define SSL_get_current_compression(x) 0
+#endif
+
+#ifndef HAVE_DLOPEN
+extern void *dlopen(const char *file, int mode);
+extern void *dlsym(void *handle, const char *symbol);
+extern int dlclose(void *handle);
+extern char *dlerror(void);
+#endif
+
+/*
+ * In some older systems, the RTLD_NOW flag isn't defined and the mode
+ * argument to dlopen must always be 1.
+ */
+#if !HAVE_DECL_RTLD_NOW
+#define RTLD_NOW 1
+#endif
+
+/*
+ * The RTLD_GLOBAL flag is wanted if available, but it doesn't exist
+ * everywhere.  If it doesn't exist, set it to 0 so it has no effect.
+ */
+#if !HAVE_DECL_RTLD_GLOBAL
+#define RTLD_GLOBAL 0
 #endif
 
 /* thread.h */

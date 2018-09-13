@@ -120,7 +120,7 @@ typedef struct ExprState
  *
  *		NumIndexAttrs		total number of columns in this index
  *		NumIndexKeyAttrs	number of key columns in index
- *		KeyAttrNumbers		underlying-rel attribute numbers used as keys
+ *		IndexAttrNumbers	underlying-rel attribute numbers used as keys
  *							(zeroes indicate expressions). It also contains
  * 							info about included columns.
  *		Expressions			expr trees for expression entries, or NIL if none
@@ -138,6 +138,7 @@ typedef struct ExprState
  *		Concurrent			are we doing a concurrent index build?
  *		BrokenHotChain		did we detect any broken HOT chains?
  *		ParallelWorkers		# of workers requested (excludes leader)
+ *		Am					Oid of index AM
  *		AmCache				private cache area for index AM
  *		Context				memory context holding this IndexInfo
  *
@@ -1580,7 +1581,7 @@ typedef struct TableFuncScanState
 	FmgrInfo   *in_functions;	/* input function for each column */
 	Oid		   *typioparams;	/* typioparam for each column */
 	int64		ordinal;		/* row number to be output next */
-	MemoryContext perValueCxt;	/* short life context for value evaluation */
+	MemoryContext perTableCxt;	/* per-table context */
 	Tuplestorestate *tupstore;	/* output tuple store */
 } TableFuncScanState;
 

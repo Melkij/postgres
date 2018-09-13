@@ -47,7 +47,6 @@
 #include "commands/trigger.h"
 #include "executor/execdebug.h"
 #include "foreign/fdwapi.h"
-#include "jit/jit.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "optimizer/clauses.h"
@@ -497,10 +496,6 @@ standard_ExecutorEnd(QueryDesc *queryDesc)
 	/* do away with our snapshots */
 	UnregisterSnapshot(estate->es_snapshot);
 	UnregisterSnapshot(estate->es_crosscheck_snapshot);
-
-	/* release JIT context, if allocated */
-	if (estate->es_jit)
-		jit_release_context(estate->es_jit);
 
 	/*
 	 * Must switch out of context before destroying it
@@ -1731,8 +1726,12 @@ ExecutePlan(EState *estate,
 		 */
 		if (TupIsNull(slot))
 		{
-			/* Allow nodes to release or shut down resources. */
-			(void) ExecShutdownNode(planstate);
+			/*
+			 * If we know we won't need to back up, we can release
+			 * resources at this point.
+			 */
+			if (!(estate->es_top_eflags & EXEC_FLAG_BACKWARD))
+				(void) ExecShutdownNode(planstate);
 			break;
 		}
 
@@ -1778,8 +1777,12 @@ ExecutePlan(EState *estate,
 		current_tuple_count++;
 		if (numberTuples && numberTuples == current_tuple_count)
 		{
-			/* Allow nodes to release or shut down resources. */
-			(void) ExecShutdownNode(planstate);
+			/*
+			 * If we know we won't need to back up, we can release
+			 * resources at this point.
+			 */
+			if (!(estate->es_top_eflags & EXEC_FLAG_BACKWARD))
+				(void) ExecShutdownNode(planstate);
 			break;
 		}
 	}
@@ -2991,17 +2994,8 @@ EvalPlanQualFetchRowMarks(EPQState *epqstate)
 								false, NULL))
 					elog(ERROR, "failed to fetch tuple for EvalPlanQual recheck");
 
-				if (HeapTupleHeaderGetNatts(tuple.t_data) <
-					RelationGetDescr(erm->relation)->natts)
-				{
-					copyTuple = heap_expand_tuple(&tuple,
-												  RelationGetDescr(erm->relation));
-				}
-				else
-				{
-					/* successful, copy tuple */
-					copyTuple = heap_copytuple(&tuple);
-				}
+				/* successful, copy tuple */
+				copyTuple = heap_copytuple(&tuple);
 				ReleaseBuffer(buffer);
 			}
 
