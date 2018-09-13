@@ -377,9 +377,9 @@ lazy_vacuum_rel(Relation onerel, int options, VacuumParams *params,
 			if (params->is_wraparound)
 			{
 				if (aggressive)
-					msgfmt = _("automatic aggressive vacuum (to prevent wraparound) of table \"%s.%s.%s\": index scans: %d\n");
+					msgfmt = _("automatic aggressive vacuum to prevent wraparound of table \"%s.%s.%s\": index scans: %d\n");
 				else
-					msgfmt = _("automatic vacuum (to prevent wraparound) of table \"%s.%s.%s\": index scans: %d\n");
+					msgfmt = _("automatic vacuum to prevent wraparound of table \"%s.%s.%s\": index scans: %d\n");
 			}
 			else
 			{
