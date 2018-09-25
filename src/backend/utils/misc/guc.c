@@ -2577,7 +2577,7 @@ static struct config_int ConfigureNamesInt[] =
 	},
 
 	{
-		{"wal_sender_timeout", PGC_SIGHUP, REPLICATION_SENDING,
+		{"wal_sender_timeout", PGC_USERSET, REPLICATION_SENDING,
 			gettext_noop("Sets the maximum time to wait for WAL replication."),
 			NULL,
 			GUC_UNIT_MS
@@ -4034,7 +4034,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"jit_provider", PGC_POSTMASTER, FILE_LOCATIONS,
+		{"jit_provider", PGC_POSTMASTER, CLIENT_CONN_PRELOAD,
 			gettext_noop("JIT provider to use."),
 			NULL,
 			GUC_SUPERUSER_ONLY

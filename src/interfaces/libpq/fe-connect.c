@@ -71,6 +71,7 @@ static int ldapServiceLookup(const char *purl, PQconninfoOption *options,
 #endif
 
 #include "common/ip.h"
+#include "common/link-canary.h"
 #include "common/scram-common.h"
 #include "mb/pg_wchar.h"
 #include "port/pg_bswap.h"
@@ -236,7 +237,7 @@ static const internalPQconninfoOption PQconninfoOptions[] = {
 	offsetof(struct pg_conn, pgtty)},
 
 	{"options", "PGOPTIONS", DefaultOption, NULL,
-		"Backend-Debug-Options", "D", 40,
+		"Backend-Options", "", 40,
 	offsetof(struct pg_conn, pgoptions)},
 
 	{"application_name", "PGAPPNAME", NULL, NULL,
@@ -1586,6 +1587,34 @@ useKeepalives(PGconn *conn)
 	return val != 0 ? 1 : 0;
 }
 
+/*
+ * Parse and try to interpret "value" as an integer value, and if successful,
+ * store it in *result, complaining if there is any trailing garbage or an
+ * overflow.
+ */
+static bool
+parse_int_param(const char *value, int *result, PGconn *conn,
+				const char *context)
+{
+	char	   *end;
+	long		numval;
+
+	*result = 0;
+
+	errno = 0;
+	numval = strtol(value, &end, 10);
+	if (errno == 0 && *end == '\0' && numval == (int) numval)
+	{
+		*result = numval;
+		return true;
+	}
+
+	appendPQExpBuffer(&conn->errorMessage,
+					  libpq_gettext("invalid integer value \"%s\" for keyword \"%s\"\n"),
+					  value, context);
+	return false;
+}
+
 #ifndef WIN32
 /*
  * Set the keepalive idle timer.
@@ -1598,7 +1627,9 @@ setKeepalivesIdle(PGconn *conn)
 	if (conn->keepalives_idle == NULL)
 		return 1;
 
-	idle = atoi(conn->keepalives_idle);
+	if (!parse_int_param(conn->keepalives_idle, &idle, conn,
+						 "keepalives_idle"))
+		return 0;
 	if (idle < 0)
 		idle = 0;
 
@@ -1630,7 +1661,9 @@ setKeepalivesInterval(PGconn *conn)
 	if (conn->keepalives_interval == NULL)
 		return 1;
 
-	interval = atoi(conn->keepalives_interval);
+	if (!parse_int_param(conn->keepalives_interval, &interval, conn,
+						 "keepalives_interval"))
+		return 0;
 	if (interval < 0)
 		interval = 0;
 
@@ -1663,7 +1696,9 @@ setKeepalivesCount(PGconn *conn)
 	if (conn->keepalives_count == NULL)
 		return 1;
 
-	count = atoi(conn->keepalives_count);
+	if (!parse_int_param(conn->keepalives_count, &count, conn,
+						 "keepalives_count"))
+		return 0;
 	if (count < 0)
 		count = 0;
 
@@ -1697,13 +1732,17 @@ setKeepalivesWin32(PGconn *conn)
 	int			idle = 0;
 	int			interval = 0;
 
-	if (conn->keepalives_idle)
-		idle = atoi(conn->keepalives_idle);
+	if (conn->keepalives_idle &&
+		!parse_int_param(conn->keepalives_idle, &idle, conn,
+						 "keepalives_idle"))
+		return 0;
 	if (idle <= 0)
 		idle = 2 * 60 * 60;		/* 2 hours = default */
 
-	if (conn->keepalives_interval)
-		interval = atoi(conn->keepalives_interval);
+	if (conn->keepalives_interval &&
+		!parse_int_param(conn->keepalives_interval, &interval, conn,
+						 "keepalives_interval"))
+		return 0;
 	if (interval <= 0)
 		interval = 1;			/* 1 second = default */
 
@@ -1747,6 +1786,19 @@ connectDBStart(PGconn *conn)
 
 	if (!conn->options_valid)
 		goto connect_errReturn;
+
+	/*
+	 * Check for bad linking to backend-internal versions of src/common
+	 * functions (see comments in link-canary.c for the reason we need this).
+	 * Nobody but developers should see this message, so we don't bother
+	 * translating it.
+	 */
+	if (!pg_link_canary_is_frontend())
+	{
+		printfPQExpBuffer(&conn->errorMessage,
+						  "libpq is incorrectly linked to backend functions\n");
+		goto connect_errReturn;
+	}
 
 	/* Ensure our buffers are empty */
 	conn->inStart = conn->inCursor = conn->inEnd = 0;
@@ -1817,7 +1869,10 @@ connectDBComplete(PGconn *conn)
 	 */
 	if (conn->connect_timeout != NULL)
 	{
-		timeout = atoi(conn->connect_timeout);
+		if (!parse_int_param(conn->connect_timeout, &timeout, conn,
+							 "connect_timeout"))
+			return 0;
+
 		if (timeout > 0)
 		{
 			/*
@@ -1828,6 +1883,8 @@ connectDBComplete(PGconn *conn)
 			if (timeout < 2)
 				timeout = 2;
 		}
+		else					/* negative means 0 */
+			timeout = 0;
 	}
 
 	for (;;)
@@ -2094,7 +2151,9 @@ keep_going:						/* We will come back to here until there is
 			thisport = DEF_PGPORT;
 		else
 		{
-			thisport = atoi(ch->port);
+			if (!parse_int_param(ch->port, &thisport, conn, "port"))
+				goto error_return;
+
 			if (thisport < 1 || thisport > 65535)
 			{
 				appendPQExpBuffer(&conn->errorMessage,

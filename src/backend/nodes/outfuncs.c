@@ -15,9 +15,13 @@
  *	  have an output function defined here (as well as an input function
  *	  in readfuncs.c).  In addition, plan nodes should have input and
  *	  output functions so that they can be sent to parallel workers.
+ *
  *	  For use in debugging, we also provide output functions for nodes
- *	  that appear in raw parsetrees and path.  These nodes however need
- *	  not have input functions.
+ *	  that appear in raw parsetrees and planner Paths.  These node types
+ *	  need not have input functions.  Output support for raw parsetrees
+ *	  is somewhat incomplete, too; in particular, utility statements are
+ *	  almost entirely unsupported.  We try to support everything that can
+ *	  appear in a raw SELECT, though.
  *
  *-------------------------------------------------------------------------
  */
@@ -2368,6 +2372,7 @@ _outRelOptInfo(StringInfo str, const RelOptInfo *node)
 	WRITE_UINT_FIELD(baserestrict_min_security);
 	WRITE_NODE_FIELD(joininfo);
 	WRITE_BOOL_FIELD(has_eclass_joins);
+	WRITE_BOOL_FIELD(consider_partitionwise_join);
 	WRITE_BITMAPSET_FIELD(top_parent_relids);
 	WRITE_NODE_FIELD(partitioned_child_rels);
 }
@@ -2998,7 +3003,7 @@ _outQuery(StringInfo str, const Query *node)
 	WRITE_NODE_FIELD(rowMarks);
 	WRITE_NODE_FIELD(setOperations);
 	WRITE_NODE_FIELD(constraintDeps);
-	/* withCheckOptions intentionally omitted, see comment in parsenodes.h */
+	WRITE_NODE_FIELD(withCheckOptions);
 	WRITE_LOCATION_FIELD(stmt_location);
 	WRITE_LOCATION_FIELD(stmt_len);
 }
@@ -3344,6 +3349,20 @@ _outParamRef(StringInfo str, const ParamRef *node)
 
 	WRITE_INT_FIELD(number);
 	WRITE_LOCATION_FIELD(location);
+}
+
+/*
+ * Node types found in raw parse trees (supported for debug purposes)
+ */
+
+static void
+_outRawStmt(StringInfo str, const RawStmt *node)
+{
+	WRITE_NODE_TYPE("RAWSTMT");
+
+	WRITE_NODE_FIELD(stmt);
+	WRITE_LOCATION_FIELD(stmt_location);
+	WRITE_INT_FIELD(stmt_len);
 }
 
 static void
@@ -4250,6 +4269,9 @@ outNode(StringInfo str, const void *obj)
 				break;
 			case T_ParamRef:
 				_outParamRef(str, obj);
+				break;
+			case T_RawStmt:
+				_outRawStmt(str, obj);
 				break;
 			case T_A_Const:
 				_outAConst(str, obj);

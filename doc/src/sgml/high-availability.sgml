@@ -736,7 +736,7 @@ protocol to make nodes agree on a serializable transactional order.
    <para>
     A simple example of configuration is:
 <programlisting>
-primary_conninfo = 'host=192.168.1.50 port=5432 user=foo password=foopass'
+primary_conninfo = 'host=192.168.1.50 port=5432 user=foo password=foopass options=''-c wal_sender_timeout=5000'''
 restore_command = 'cp /path/to/archive/%f %p'
 archive_cleanup_command = 'pg_archivecleanup /path/to/archive %r'
 </programlisting>
@@ -965,7 +965,7 @@ postgres=# SELECT * FROM pg_create_physical_replication_slot('node_a_slot');
  node_a_slot |
 
 postgres=# SELECT slot_name, slot_type, active FROM pg_replication_slots;
-  slot_name  | slot_type | active 
+  slot_name  | slot_type | active
 -------------+-----------+--------
  node_a_slot | physical  | f
 (1 row)
