@@ -439,10 +439,10 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
         </listitem>
        </varlistentry>
 
-       <varlistentry id="promote-signal-file" xreflabel="promote_signal_file">
-        <term><varname>promote_signal_file</varname> (<type>string</type>)
+       <varlistentry id="promote-trigger-file" xreflabel="promote_trigger_file">
+        <term><varname>promote_trigger_file</varname> (<type>string</type>)
         <indexterm>
-          <primary><varname>promote_signal_file</varname> recovery parameter</primary>
+          <primary><varname>promote_trigger_file</varname> recovery parameter</primary>
         </indexterm>
         </term>
         <listitem>

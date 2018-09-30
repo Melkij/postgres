@@ -283,7 +283,7 @@
 
 #primary_conninfo = ''			# connection string on sending server
 #primary_slot_name = ''			# connection slot on sending server
-#promote_signal_file = ''		# filename whose presence ends recovery
+#promote_trigger_file = ''		# filename whose presence ends recovery
 #hot_standby = on			# "off" disallows queries during recovery
 					# (change requires restart)
 #max_standby_archive_delay = 30s	# max delay before canceling queries

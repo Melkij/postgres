@@ -284,7 +284,7 @@ char	   *PrimarySlotName = NULL;
 /* are we currently in standby mode? */
 bool		StandbyMode = false;
 
-char	   *PromoteSignalFile = NULL;
+char	   *PromoteTriggerFile = NULL;
 char		RecoverySignalFile[MAXPGPATH];
 char		StandbySignalFile[MAXPGPATH];
 
@@ -12318,14 +12318,14 @@ CheckForStandbyTrigger(void)
 		return true;
 	}
 
-	if (PromoteSignalFile == NULL)
+	if (PromoteTriggerFile == NULL)
 		return false;
 
-	if (stat(PromoteSignalFile, &stat_buf) == 0)
+	if (stat(PromoteTriggerFile, &stat_buf) == 0)
 	{
 		ereport(LOG,
-				(errmsg("promote signal file found: %s", PromoteSignalFile)));
-		unlink(PromoteSignalFile);
+				(errmsg("promote signal file found: %s", PromoteTriggerFile)));
+		unlink(PromoteTriggerFile);
 		triggered = true;
 		fast_promote = true;
 		return true;
@@ -12334,7 +12334,7 @@ CheckForStandbyTrigger(void)
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not stat promote signal file \"%s\": %m",
-						PromoteSignalFile)));
+						PromoteTriggerFile)));
 
 	return false;
 }

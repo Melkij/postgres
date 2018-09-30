@@ -3395,11 +3395,11 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"promote_signal_file", PGC_POSTMASTER, REPLICATION_STANDBY,
+		{"promote_trigger_file", PGC_POSTMASTER, REPLICATION_STANDBY,
 			gettext_noop("Specifies a filename whose presence ends recovery in the standby"),
 			NULL
 		},
-		&PromoteSignalFile,
+		&PromoteTriggerFile,
 		NULL,
 		NULL, NULL, NULL
 	},

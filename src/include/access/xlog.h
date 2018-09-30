@@ -171,7 +171,7 @@ extern bool StandbyMode;
 extern char *PrimaryConnInfo;
 extern char *PrimarySlotName;
 
-extern char *PromoteSignalFile;
+extern char *PromoteTriggerFile;
 
 extern char *recoveryTargetTLIString;
 extern RecoveryTargetTimeLineGoal recoveryTargetTimeLineGoal;

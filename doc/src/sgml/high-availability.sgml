@@ -1469,9 +1469,9 @@ synchronous_standby_names = 'ANY 2 (s1, s2, s3)'
    <para>
     To trigger failover of a log-shipping standby server,
     run <command>pg_ctl promote</command> or create a trigger
-    file with the file name and path specified by the <varname>promote_signal_file</varname>
+    file with the file name and path specified by the <varname>promote_trigger_file</varname>
     setting. If you're planning to use
-    <command>pg_ctl promote</command> to fail over, <varname>promote_signal_file</varname> is
+    <command>pg_ctl promote</command> to fail over, <varname>promote_trigger_file</varname> is
     not required. If you're setting up the reporting servers that are
     only used to offload read-only queries from the primary, not for high
     availability purposes, you don't need to promote it.
