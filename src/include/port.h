@@ -134,7 +134,12 @@ extern unsigned char pg_tolower(unsigned char ch);
 extern unsigned char pg_ascii_toupper(unsigned char ch);
 extern unsigned char pg_ascii_tolower(unsigned char ch);
 
-#ifdef USE_REPL_SNPRINTF
+/*
+ * Beginning in v12, we always replace snprintf() and friends with our own
+ * implementation.  This symbol is no longer consulted by the core code,
+ * but keep it defined anyway in case any extensions are looking at it.
+ */
+#define USE_REPL_SNPRINTF 1
 
 /*
  * Versions of libintl >= 0.13 try to replace printf() and friends with
@@ -168,26 +173,28 @@ extern int	pg_fprintf(FILE *stream, const char *fmt,...) pg_attribute_printf(2, 
 extern int	pg_printf(const char *fmt,...) pg_attribute_printf(1, 2);
 
 /*
- *	The GCC-specific code below prevents the pg_attribute_printf above from
- *	being replaced, and this is required because gcc doesn't know anything
- *	about pg_printf.
+ * We use __VA_ARGS__ for printf to prevent replacing references to
+ * the "printf" format archetype in format() attribute declarations.
+ * That unfortunately means that taking a function pointer to printf
+ * will not do what we'd wish.  (If you need to do that, you must name
+ * pg_printf explicitly.)  For printf's sibling functions, use
+ * parameterless macros so that function pointers will work unsurprisingly.
  */
-#ifdef __GNUC__
-#define vsnprintf(...)	pg_vsnprintf(__VA_ARGS__)
-#define snprintf(...)	pg_snprintf(__VA_ARGS__)
-#define sprintf(...)	pg_sprintf(__VA_ARGS__)
-#define vfprintf(...)	pg_vfprintf(__VA_ARGS__)
-#define fprintf(...)	pg_fprintf(__VA_ARGS__)
-#define printf(...)		pg_printf(__VA_ARGS__)
-#else
 #define vsnprintf		pg_vsnprintf
 #define snprintf		pg_snprintf
 #define sprintf			pg_sprintf
 #define vfprintf		pg_vfprintf
 #define fprintf			pg_fprintf
-#define printf			pg_printf
-#endif
-#endif							/* USE_REPL_SNPRINTF */
+#define printf(...)		pg_printf(__VA_ARGS__)
+
+/* Replace strerror() with our own, somewhat more robust wrapper */
+extern char *pg_strerror(int errnum);
+#define strerror pg_strerror
+
+/* Likewise for strerror_r(); note we prefer the GNU API for that */
+extern char *pg_strerror_r(int errnum, char *buf, size_t buflen);
+#define strerror_r pg_strerror_r
+#define PG_STRERROR_R_BUFLEN 256	/* Recommended buffer size for strerror_r */
 
 /* Portable prompt handling */
 extern void simple_prompt(const char *prompt, char *destination, size_t destlen,
@@ -355,7 +362,7 @@ extern int	isinf(double x);
 #undef isinf
 #define isinf __builtin_isinf
 #endif							/* __has_builtin(isinf) */
-#endif							/* __clang__ && !__cplusplus*/
+#endif							/* __clang__ && !__cplusplus */
 #endif							/* !HAVE_ISINF */
 
 #ifndef HAVE_MKDTEMP
@@ -403,7 +410,7 @@ extern void srandom(unsigned int seed);
 #ifndef HAVE_DLOPEN
 extern void *dlopen(const char *file, int mode);
 extern void *dlsym(void *handle, const char *symbol);
-extern int dlclose(void *handle);
+extern int	dlclose(void *handle);
 extern char *dlerror(void);
 #endif
 
@@ -424,8 +431,6 @@ extern char *dlerror(void);
 #endif
 
 /* thread.h */
-extern char *pqStrerror(int errnum, char *strerrbuf, size_t buflen);
-
 #ifndef WIN32
 extern int pqGetpwuid(uid_t uid, struct passwd *resultbuf, char *buffer,
 		   size_t buflen, struct passwd **result);

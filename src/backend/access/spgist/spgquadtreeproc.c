@@ -278,8 +278,7 @@ spg_quad_inner_consistent(PG_FUNCTION_ARGS)
 
 			if (in->norderbys > 0)
 			{
-				MemoryContext oldCtx = MemoryContextSwitchTo(
-															 in->traversalMemoryContext);
+				MemoryContext oldCtx = MemoryContextSwitchTo(in->traversalMemoryContext);
 
 				/* Use parent quadrant box as traversalValue */
 				BOX		   *quadrant = box_copy(bbox);
@@ -287,8 +286,7 @@ spg_quad_inner_consistent(PG_FUNCTION_ARGS)
 				MemoryContextSwitchTo(oldCtx);
 
 				out->traversalValues[i] = quadrant;
-				out->distances[i] = spg_key_orderbys_distances(
-															   BoxPGetDatum(quadrant), false,
+				out->distances[i] = spg_key_orderbys_distances(BoxPGetDatum(quadrant), false,
 															   in->orderbys, in->norderbys);
 			}
 		}
@@ -385,16 +383,14 @@ spg_quad_inner_consistent(PG_FUNCTION_ARGS)
 
 			if (in->norderbys > 0)
 			{
-				MemoryContext oldCtx = MemoryContextSwitchTo(
-															 in->traversalMemoryContext);
+				MemoryContext oldCtx = MemoryContextSwitchTo(in->traversalMemoryContext);
 				BOX		   *quadrant = getQuadrantArea(bbox, centroid, i);
 
 				MemoryContextSwitchTo(oldCtx);
 
 				out->traversalValues[out->nNodes] = quadrant;
 
-				out->distances[out->nNodes] = spg_key_orderbys_distances(
-																		 BoxPGetDatum(quadrant), false,
+				out->distances[out->nNodes] = spg_key_orderbys_distances(BoxPGetDatum(quadrant), false,
 																		 in->orderbys, in->norderbys);
 			}
 
@@ -465,8 +461,7 @@ spg_quad_leaf_consistent(PG_FUNCTION_ARGS)
 
 	if (res && in->norderbys > 0)
 		/* ok, it passes -> let's compute the distances */
-		out->distances = spg_key_orderbys_distances(
-													BoxPGetDatum(in->leafDatum), true,
+		out->distances = spg_key_orderbys_distances(in->leafDatum, true,
 													in->orderbys, in->norderbys);
 
 	PG_RETURN_BOOL(res);

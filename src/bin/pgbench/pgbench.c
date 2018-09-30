@@ -32,8 +32,8 @@
 #endif
 
 #include "postgres_fe.h"
+#include "common/int.h"
 #include "fe_utils/conditional.h"
-
 #include "getopt_long.h"
 #include "libpq-fe.h"
 #include "portability/instr_time.h"
@@ -169,7 +169,7 @@ double		sample_rate = 0.0;
  * When threads are throttled to a given rate limit, this is the target delay
  * to reach that rate in usec.  0 is the default and means no throttling.
  */
-int64		throttle_delay = 0;
+double		throttle_delay = 0;
 
 /*
  * Transactions which take longer than this limit (in usec) are counted as
@@ -662,19 +662,27 @@ is_an_int(const char *str)
 /*
  * strtoint64 -- convert a string to 64-bit integer
  *
- * This function is a modified version of scanint8() from
+ * This function is a slightly modified version of scanint8() from
  * src/backend/utils/adt/int8.c.
+ *
+ * The function returns whether the conversion worked, and if so
+ * "*result" is set to the result.
+ *
+ * If not errorOK, an error message is also printed out on errors.
  */
-int64
-strtoint64(const char *str)
+bool
+strtoint64(const char *str, bool errorOK, int64 *result)
 {
 	const char *ptr = str;
-	int64		result = 0;
-	int			sign = 1;
+	int64		tmp = 0;
+	bool		neg = false;
 
 	/*
 	 * Do our own scan, rather than relying on sscanf which might be broken
 	 * for long long.
+	 *
+	 * As INT64_MIN can't be stored as a positive 64 bit integer, accumulate
+	 * value as a negative number.
 	 */
 
 	/* skip leading spaces */
@@ -685,46 +693,80 @@ strtoint64(const char *str)
 	if (*ptr == '-')
 	{
 		ptr++;
-
-		/*
-		 * Do an explicit check for INT64_MIN.  Ugly though this is, it's
-		 * cleaner than trying to get the loop below to handle it portably.
-		 */
-		if (strncmp(ptr, "9223372036854775808", 19) == 0)
-		{
-			result = PG_INT64_MIN;
-			ptr += 19;
-			goto gotdigits;
-		}
-		sign = -1;
+		neg = true;
 	}
 	else if (*ptr == '+')
 		ptr++;
 
 	/* require at least one digit */
-	if (!isdigit((unsigned char) *ptr))
-		fprintf(stderr, "invalid input syntax for integer: \"%s\"\n", str);
+	if (unlikely(!isdigit((unsigned char) *ptr)))
+		goto invalid_syntax;
 
 	/* process digits */
 	while (*ptr && isdigit((unsigned char) *ptr))
 	{
-		int64		tmp = result * 10 + (*ptr++ - '0');
+		int8		digit = (*ptr++ - '0');
 
-		if ((tmp / 10) != result)	/* overflow? */
-			fprintf(stderr, "value \"%s\" is out of range for type bigint\n", str);
-		result = tmp;
+		if (unlikely(pg_mul_s64_overflow(tmp, 10, &tmp)) ||
+			unlikely(pg_sub_s64_overflow(tmp, digit, &tmp)))
+			goto out_of_range;
 	}
-
-gotdigits:
 
 	/* allow trailing whitespace, but not other trailing chars */
 	while (*ptr != '\0' && isspace((unsigned char) *ptr))
 		ptr++;
 
-	if (*ptr != '\0')
-		fprintf(stderr, "invalid input syntax for integer: \"%s\"\n", str);
+	if (unlikely(*ptr != '\0'))
+		goto invalid_syntax;
 
-	return ((sign < 0) ? -result : result);
+	if (!neg)
+	{
+		if (unlikely(tmp == PG_INT64_MIN))
+			goto out_of_range;
+		tmp = -tmp;
+	}
+
+	*result = tmp;
+	return true;
+
+out_of_range:
+	if (!errorOK)
+		fprintf(stderr,
+				"value \"%s\" is out of range for type bigint\n", str);
+	return false;
+
+invalid_syntax:
+	if (!errorOK)
+		fprintf(stderr,
+				"invalid input syntax for type bigint: \"%s\"\n",str);
+	return false;
+}
+
+/* convert string to double, detecting overflows/underflows */
+bool
+strtodouble(const char *str, bool errorOK, double *dv)
+{
+	char *end;
+
+	errno = 0;
+	*dv = strtod(str, &end);
+
+	if (unlikely(errno != 0))
+	{
+		if (!errorOK)
+			fprintf(stderr,
+					"value \"%s\" is out of range for type double\n", str);
+		return false;
+	}
+
+	if (unlikely(end == str || *end != '\0'))
+	{
+		if (!errorOK)
+			fprintf(stderr,
+					"invalid input syntax for type double: \"%s\"\n",str);
+		return false;
+	}
+	return true;
 }
 
 /* random number generator: uniform distribution from min to max inclusive */
@@ -826,9 +868,12 @@ getGaussianRand(TState *thread, int64 min, int64 max, double parameter)
 /*
  * random number generator: generate a value, such that the series of values
  * will approximate a Poisson distribution centered on the given value.
+ *
+ * Individual results are rounded to integers, though the center value need
+ * not be one.
  */
 static int64
-getPoissonRand(TState *thread, int64 center)
+getPoissonRand(TState *thread, double center)
 {
 	/*
 	 * Use inverse transform sampling to generate a value > 0, such that the
@@ -839,7 +884,7 @@ getPoissonRand(TState *thread, int64 center)
 	/* erand in [0, 1), uniform in (0, 1] */
 	uniform = 1.0 - pg_erand48(thread->random_state);
 
-	return (int64) (-log(uniform) * ((double) center) + 0.5);
+	return (int64) (-log(uniform) * center + 0.5);
 }
 
 /* helper function for getZipfianRand */
@@ -1317,14 +1362,19 @@ makeVariableValue(Variable *var)
 	}
 	else if (is_an_int(var->svalue))
 	{
-		setIntValue(&var->value, strtoint64(var->svalue));
+		/* if it looks like an int, it must be an int without overflow */
+		int64 iv;
+
+		if (!strtoint64(var->svalue, false, &iv))
+			return false;
+
+		setIntValue(&var->value, iv);
 	}
 	else						/* type should be double */
 	{
 		double		dv;
-		char		xs;
 
-		if (sscanf(var->svalue, "%lf%c", &dv, &xs) != 1)
+		if (!strtodouble(var->svalue, true, &dv))
 		{
 			fprintf(stderr,
 					"malformed variable \"%s\" value: \"%s\"\n",
@@ -1940,7 +1990,8 @@ evalStandardFunc(TState *thread, CState *st,
 				else			/* we have integer operands, or % */
 				{
 					int64		li,
-								ri;
+								ri,
+								res;
 
 					if (!coerceToInt(lval, &li) ||
 						!coerceToInt(rval, &ri))
@@ -1949,15 +2000,30 @@ evalStandardFunc(TState *thread, CState *st,
 					switch (func)
 					{
 						case PGBENCH_ADD:
-							setIntValue(retval, li + ri);
+							if (pg_add_s64_overflow(li, ri, &res))
+							{
+								fprintf(stderr, "bigint add out of range\n");
+								return false;
+							}
+							setIntValue(retval, res);
 							return true;
 
 						case PGBENCH_SUB:
-							setIntValue(retval, li - ri);
+							if (pg_sub_s64_overflow(li, ri, &res))
+							{
+								fprintf(stderr, "bigint sub out of range\n");
+								return false;
+							}
+							setIntValue(retval, res);
 							return true;
 
 						case PGBENCH_MUL:
-							setIntValue(retval, li * ri);
+							if (pg_mul_s64_overflow(li, ri, &res))
+							{
+								fprintf(stderr, "bigint mul out of range\n");
+								return false;
+							}
+							setIntValue(retval, res);
 							return true;
 
 						case PGBENCH_EQ:
@@ -1991,7 +2057,7 @@ evalStandardFunc(TState *thread, CState *st,
 									/* overflow check (needed for INT64_MIN) */
 									if (li == PG_INT64_MIN)
 									{
-										fprintf(stderr, "bigint out of range\n");
+										fprintf(stderr, "bigint div out of range\n");
 										return false;
 									}
 									else
@@ -5114,8 +5180,8 @@ main(int argc, char **argv)
 						fprintf(stderr, "invalid rate limit: \"%s\"\n", optarg);
 						exit(1);
 					}
-					/* Invert rate limit into a time offset */
-					throttle_delay = (int64) (1000000.0 / throttle_value);
+					/* Invert rate limit into per-transaction delay in usec */
+					throttle_delay = 1000000.0 / throttle_value;
 				}
 				break;
 			case 'L':
@@ -5239,7 +5305,11 @@ main(int argc, char **argv)
 	if (nthreads > nclients)
 		nthreads = nclients;
 
-	/* compute a per thread delay */
+	/*
+	 * Convert throttle_delay to a per-thread delay time.  Note that this
+	 * might be a fractional number of usec, but that's OK, since it's just
+	 * the center of a Poisson distribution of delays.
+	 */
 	throttle_delay *= nthreads;
 
 	if (argc > optind)

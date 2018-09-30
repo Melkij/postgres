@@ -668,6 +668,7 @@ python_majorversion
 PYTHON
 perl_embed_ldflags
 perl_embed_ccflags
+perl_includedir
 perl_useshrplib
 perl_privlibexp
 perl_archlibexp
@@ -9773,6 +9774,14 @@ You might have to rebuild your Perl installation.  Refer to the
 documentation for details.  Use --without-perl to disable building
 PL/Perl." "$LINENO" 5
   fi
+  # On most platforms, archlibexp is also where the Perl include files live ...
+  perl_includedir="$perl_archlibexp"
+  # ... but on some macOS versions, we must look under $PG_SYSROOT instead
+  if test x"$PG_SYSROOT" != x"" ; then
+    if test -d "$PG_SYSROOT$perl_archlibexp" ; then
+      perl_includedir="$PG_SYSROOT$perl_archlibexp"
+    fi
+  fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for CFLAGS recommended by Perl" >&5
 $as_echo_n "checking for CFLAGS recommended by Perl... " >&6; }
@@ -10783,12 +10792,10 @@ else
 int
 main ()
 {
-#ifndef _AIX
-int strerror_r(int, char *, size_t);
-#else
-/* Older AIX has 'int' for the third argument so we don't test the args. */
-int strerror_r();
-#endif
+char buf[100];
+  switch (strerror_r(1, buf, sizeof(buf)))
+  { case 0: break; default: break; }
+
   ;
   return 0;
 }
@@ -15358,97 +15365,6 @@ $as_echo "#define HAVE_PS_STRINGS 1" >>confdefs.h
 fi
 
 
-# We use our snprintf.c emulation if either snprintf() or vsnprintf()
-# is missing.  Yes, there are machines that have only one.  We may
-# also decide to use snprintf.c if snprintf() is present but does not
-# have all the features we need --- see below.
-
-if test "$PORTNAME" = "win32"; then
-  # Win32 gets snprintf.c built unconditionally.
-  #
-  # To properly translate all NLS languages strings, we must support the
-  # *printf() %$ format, which allows *printf() arguments to be selected
-  # by position in the translated string.
-  #
-  # libintl versions < 0.13 use the native *printf() functions, and Win32
-  # *printf() doesn't understand %$, so we must use our /port versions,
-  # which do understand %$. libintl versions >= 0.13 include their own
-  # *printf versions on Win32.  The libintl 0.13 release note text is:
-  #
-  #   C format strings with positions, as they arise when a translator
-  #   needs to reorder a sentence, are now supported on all platforms.
-  #   On those few platforms (NetBSD and Woe32) for which the native
-  #   printf()/fprintf()/... functions don't support such format
-  #   strings, replacements are provided through <libintl.h>.
-  #
-  # We could use libintl >= 0.13's *printf() if we were sure that we had
-  # a libintl >= 0.13 at runtime, but seeing that there is no clean way
-  # to guarantee that, it is best to just use our own, so we are sure to
-  # get %$ support. In include/port.h we disable the *printf() macros
-  # that might have been defined by libintl.
-  #
-  # We do this unconditionally whether NLS is used or not so we are sure
-  # that all Win32 libraries and binaries behave the same.
-  pgac_need_repl_snprintf=yes
-else
-  pgac_need_repl_snprintf=no
-  for ac_func in snprintf
-do :
-  ac_fn_c_check_func "$LINENO" "snprintf" "ac_cv_func_snprintf"
-if test "x$ac_cv_func_snprintf" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_SNPRINTF 1
-_ACEOF
-
-else
-  pgac_need_repl_snprintf=yes
-fi
-done
-
-  for ac_func in vsnprintf
-do :
-  ac_fn_c_check_func "$LINENO" "vsnprintf" "ac_cv_func_vsnprintf"
-if test "x$ac_cv_func_vsnprintf" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_VSNPRINTF 1
-_ACEOF
-
-else
-  pgac_need_repl_snprintf=yes
-fi
-done
-
-fi
-
-
-# Check whether <stdio.h> declares snprintf() and vsnprintf(); if not,
-# include/c.h will provide declarations.  Note this is a separate test
-# from whether the functions exist in the C library --- there are
-# systems that have the functions but don't bother to declare them :-(
-
-ac_fn_c_check_decl "$LINENO" "snprintf" "ac_cv_have_decl_snprintf" "$ac_includes_default"
-if test "x$ac_cv_have_decl_snprintf" = xyes; then :
-  ac_have_decl=1
-else
-  ac_have_decl=0
-fi
-
-cat >>confdefs.h <<_ACEOF
-#define HAVE_DECL_SNPRINTF $ac_have_decl
-_ACEOF
-ac_fn_c_check_decl "$LINENO" "vsnprintf" "ac_cv_have_decl_vsnprintf" "$ac_includes_default"
-if test "x$ac_cv_have_decl_vsnprintf" = xyes; then :
-  ac_have_decl=1
-else
-  ac_have_decl=0
-fi
-
-cat >>confdefs.h <<_ACEOF
-#define HAVE_DECL_VSNPRINTF $ac_have_decl
-_ACEOF
-
-
-
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for isinf" >&5
 $as_echo_n "checking for isinf... " >&6; }
 if ${ac_cv_func_isinf+:} false; then :
@@ -15630,19 +15546,6 @@ else
   case " $LIBOBJS " in
   *" srandom.$ac_objext "* ) ;;
   *) LIBOBJS="$LIBOBJS srandom.$ac_objext"
- ;;
-esac
-
-fi
-
-ac_fn_c_check_func "$LINENO" "strerror" "ac_cv_func_strerror"
-if test "x$ac_cv_func_strerror" = xyes; then :
-  $as_echo "#define HAVE_STRERROR 1" >>confdefs.h
-
-else
-  case " $LIBOBJS " in
-  *" strerror.$ac_objext "* ) ;;
-  *) LIBOBJS="$LIBOBJS strerror.$ac_objext"
  ;;
 esac
 
@@ -16179,53 +16082,6 @@ fi
 # Run tests below here
 # --------------------
 
-# For NLS, force use of our snprintf if system's doesn't do arg control.
-# See comment above at snprintf test for details.
-if test "$enable_nls" = yes -a "$pgac_need_repl_snprintf" = no; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether snprintf supports argument control" >&5
-$as_echo_n "checking whether snprintf supports argument control... " >&6; }
-if ${pgac_cv_snprintf_arg_control+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  if test "$cross_compiling" = yes; then :
-  pgac_cv_snprintf_arg_control=cross
-else
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-#include <stdio.h>
-#include <string.h>
-
-int main()
-{
-  char buf[100];
-
-  /* can it swap arguments? */
-  snprintf(buf, 100, "%2\$d %1\$d", 3, 4);
-  if (strcmp(buf, "4 3") != 0)
-    return 1;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_run "$LINENO"; then :
-  pgac_cv_snprintf_arg_control=yes
-else
-  pgac_cv_snprintf_arg_control=no
-fi
-rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
-  conftest.$ac_objext conftest.beam conftest.$ac_ext
-fi
-
-
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $pgac_cv_snprintf_arg_control" >&5
-$as_echo "$pgac_cv_snprintf_arg_control" >&6; }
-
-  if test $pgac_cv_snprintf_arg_control != yes ; then
-    pgac_need_repl_snprintf=yes
-  fi
-fi
-
-
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether long int is 64 bits" >&5
 $as_echo_n "checking whether long int is 64 bits... " >&6; }
@@ -16405,8 +16261,6 @@ _ACEOF
 
 
 # Select the printf length modifier that goes with that, too.
-# (This used to be bound up with replacement-snprintf selection, but now
-# we assume that the native *printf functions use standard length modifiers.)
 if test x"$pg_int64_type" = x"long long int" ; then
   INT64_MODIFIER='"ll"'
 else
@@ -16418,120 +16272,6 @@ cat >>confdefs.h <<_ACEOF
 #define INT64_MODIFIER $INT64_MODIFIER
 _ACEOF
 
-
-# Force use of our snprintf if the system's doesn't support the %z flag.
-# (Note this test uses PG_INT64_TYPE and INT64_MODIFIER.)
-if test "$pgac_need_repl_snprintf" = no; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether snprintf supports the %z modifier" >&5
-$as_echo_n "checking whether snprintf supports the %z modifier... " >&6; }
-if ${pgac_cv_snprintf_size_t_support+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  if test "$cross_compiling" = yes; then :
-  pgac_cv_snprintf_size_t_support=cross
-else
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-#include <stdio.h>
-#include <string.h>
-
-int main()
-{
-  char bufz[100];
-  char buf64[100];
-
-  /*
-   * Print the largest unsigned number fitting in a size_t using both %zu
-   * and the previously-determined format for 64-bit integers.  Note that
-   * we don't run this code unless we know snprintf handles 64-bit ints.
-   */
-  bufz[0] = '\0';  /* in case snprintf fails to emit anything */
-  snprintf(bufz, sizeof(bufz), "%zu", ~((size_t) 0));
-  snprintf(buf64, sizeof(buf64), "%" INT64_MODIFIER "u",
-    (unsigned PG_INT64_TYPE) ~((size_t) 0));
-  if (strcmp(bufz, buf64) != 0)
-    return 1;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_run "$LINENO"; then :
-  pgac_cv_snprintf_size_t_support=yes
-else
-  pgac_cv_snprintf_size_t_support=no
-fi
-rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
-  conftest.$ac_objext conftest.beam conftest.$ac_ext
-fi
-
-
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $pgac_cv_snprintf_size_t_support" >&5
-$as_echo "$pgac_cv_snprintf_size_t_support" >&6; }
-
-  if test "$pgac_cv_snprintf_size_t_support" != yes; then
-    pgac_need_repl_snprintf=yes
-  fi
-fi
-
-# Force use of our snprintf if the system's doesn't handle buffer overrun
-# as specified by C99.
-if test "$pgac_need_repl_snprintf" = no; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether snprintf handles buffer overrun per C99" >&5
-$as_echo_n "checking whether snprintf handles buffer overrun per C99... " >&6; }
-if ${pgac_cv_snprintf_c99_result+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  if test "$cross_compiling" = yes; then :
-  pgac_cv_snprintf_c99_result=cross
-else
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-#include <stdio.h>
-#include <string.h>
-
-int main()
-{
-  char buf[10];
-
-  strcpy(buf, "abcdefghi");
-  if (snprintf(buf, 4, "%d", 123456) != 6)
-    return 1;
-  if (strcmp(buf, "123") != 0 || buf[4] != 'e')
-    return 1;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_run "$LINENO"; then :
-  pgac_cv_snprintf_c99_result=yes
-else
-  pgac_cv_snprintf_c99_result=no
-fi
-rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
-  conftest.$ac_objext conftest.beam conftest.$ac_ext
-fi
-
-
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $pgac_cv_snprintf_c99_result" >&5
-$as_echo "$pgac_cv_snprintf_c99_result" >&6; }
-
-  if test "$pgac_cv_snprintf_c99_result" != yes; then
-    pgac_need_repl_snprintf=yes
-  fi
-fi
-
-# Now we have checked all the reasons to replace snprintf
-if test $pgac_need_repl_snprintf = yes; then
-
-$as_echo "#define USE_REPL_SNPRINTF 1" >>confdefs.h
-
-  case " $LIBOBJS " in
-  *" snprintf.$ac_objext "* ) ;;
-  *) LIBOBJS="$LIBOBJS snprintf.$ac_objext"
- ;;
-esac
-
-fi
 
 # has to be down here, rather than with the other builtins, because
 # the test uses PG_INT64_TYPE.
@@ -18306,7 +18046,14 @@ if test -z "$TCL_CONFIG_SH"; then
     set X $pgac_test_dirs; shift
     if test $# -eq 0; then
         test -z "$TCLSH" && as_fn_error $? "unable to locate tclConfig.sh because no Tcl shell was found" "$LINENO" 5
-        set X `echo 'puts $auto_path' | $TCLSH`; shift
+        pgac_test_dirs=`echo 'puts $auto_path' | $TCLSH`
+        # On newer macOS, $auto_path frequently doesn't include the place
+        # where tclConfig.sh actually lives.  Append that to the end, so as not
+        # to break cases where a non-default Tcl installation is being used.
+        if test -d "$PG_SYSROOT/System/Library/Frameworks/Tcl.framework" ; then
+            pgac_test_dirs="$pgac_test_dirs $PG_SYSROOT/System/Library/Frameworks/Tcl.framework"
+        fi
+        set X $pgac_test_dirs; shift
     fi
 
     for pgac_dir do
@@ -18355,7 +18102,7 @@ fi
 # check for <perl.h>
 if test "$with_perl" = yes; then
   ac_save_CPPFLAGS=$CPPFLAGS
-  CPPFLAGS="$CPPFLAGS -I$perl_archlibexp/CORE"
+  CPPFLAGS="$CPPFLAGS -I$perl_includedir/CORE"
   ac_fn_c_check_header_compile "$LINENO" "perl.h" "ac_cv_header_perl_h" "#include <EXTERN.h>
 "
 if test "x$ac_cv_header_perl_h" = xyes; then :
