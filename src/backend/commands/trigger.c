@@ -577,10 +577,12 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 		 * 'OLD' must always have varno equal to 1 and 'NEW' equal to 2.
 		 */
 		rte = addRangeTableEntryForRelation(pstate, rel,
+											AccessShareLock,
 											makeAlias("old", NIL),
 											false, false);
 		addRTEtoQuery(pstate, rte, false, true, true);
 		rte = addRangeTableEntryForRelation(pstate, rel,
+											AccessShareLock,
 											makeAlias("new", NIL),
 											false, false);
 		addRTEtoQuery(pstate, rte, false, true, true);
@@ -5784,7 +5786,7 @@ AfterTriggerSaveEvent(EState *estate, ResultRelInfo *relinfo,
 
 			if (map != NULL)
 			{
-				HeapTuple	converted = do_convert_tuple(oldtup, map);
+				HeapTuple	converted = execute_attr_map_tuple(oldtup, map);
 
 				tuplestore_puttuple(old_tuplestore, converted);
 				pfree(converted);
@@ -5804,7 +5806,7 @@ AfterTriggerSaveEvent(EState *estate, ResultRelInfo *relinfo,
 				tuplestore_puttuple(new_tuplestore, original_insert_tuple);
 			else if (map != NULL)
 			{
-				HeapTuple	converted = do_convert_tuple(newtup, map);
+				HeapTuple	converted = execute_attr_map_tuple(newtup, map);
 
 				tuplestore_puttuple(new_tuplestore, converted);
 				pfree(converted);
