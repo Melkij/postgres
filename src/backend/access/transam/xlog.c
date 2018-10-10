@@ -169,6 +169,13 @@ const struct config_enum_entry archive_mode_options[] = {
 	{NULL, 0, false}
 };
 
+const struct config_enum_entry recovery_target_action_options[] = {
+	{"pause", RECOVERY_TARGET_ACTION_PAUSE, false},
+	{"promote", RECOVERY_TARGET_ACTION_PROMOTE, false},
+	{"shutdown", RECOVERY_TARGET_ACTION_SHUTDOWN, false},
+	{NULL, 0, false}
+};
+
 /*
  * Statistics for current checkpoint are collected in this global struct.
  * Because only the checkpointer or a stand-alone backend can perform
@@ -265,10 +272,8 @@ char	   *recoveryRestoreCommand = NULL;
 char	   *recoveryEndCommand = NULL;
 char	   *archiveCleanupCommand = NULL;
 RecoveryTargetType recoveryTarget = RECOVERY_TARGET_UNSET;
-char	   *recoveryTargetTypeString;
-char	   *recoveryTargetValue = NULL;
 bool		recoveryTargetInclusive = true;
-RecoveryTargetAction recoveryTargetAction = RECOVERY_TARGET_ACTION_PAUSE;
+int 		recoveryTargetAction = RECOVERY_TARGET_ACTION_PAUSE;
 TransactionId recoveryTargetXid;
 TimestampTz recoveryTargetTime;
 char	   *recoveryTargetName;
@@ -5342,7 +5347,7 @@ readRecoverySignalFile(void)
 	if (stat(RECOVERY_COMMAND_FILE, &stat_buf) == 0)
 		ereport(FATAL,
 				(errcode_for_file_access(),
-				 errmsg("deprecated API using recovery command file \"%s\"",
+				 errmsg("using recovery command file \"%s\" is not supported",
 						RECOVERY_COMMAND_FILE)));
 
 	/*
@@ -5441,32 +5446,63 @@ logRecoveryParameters(void)
 		ereport(normal_log_level,
 				(errmsg_internal("recovery_min_apply_delay = '%u'", recovery_min_apply_delay)));
 
+	switch (recoveryTarget)
+	{
+		case RECOVERY_TARGET_UNSET:
+			/* no recovery target was requested */
+			break;
+		case RECOVERY_TARGET_XID:
+			ereport(normal_log_level,
+					(errmsg_internal("recovery_target_xid = %u",
+									 recoveryTargetXid)));
+			break;
+		case RECOVERY_TARGET_TIME:
+			ereport(normal_log_level,
+					(errmsg_internal("recovery_target_time = '%s'",
+									 timestamptz_to_str(recoveryTargetTime))));
+			break;
+		case RECOVERY_TARGET_NAME:
+			ereport(normal_log_level,
+					(errmsg_internal("recovery_target_name = '%s'",
+									 recoveryTargetName)));
+			break;
+		case RECOVERY_TARGET_LSN:
+			ereport(normal_log_level,
+					(errmsg_internal("recovery_target_lsn = '%X/%X'",
+									 (uint32) (recoveryTargetLSN >> 32),
+									 (uint32) recoveryTargetLSN)));
+			break;
+		case RECOVERY_TARGET_IMMEDIATE:
+			ereport(normal_log_level,
+					(errmsg_internal("recovery_target = '%s'",
+									 "immediate")));
+			break;
+	}
+
 	/*
 	 * Check details for recovery target, if any
 	 */
 	if (recoveryTarget > RECOVERY_TARGET_UNSET)
 	{
 		ereport(normal_log_level,
-				(errmsg_internal("recovery_target_type = '%s'", RecoveryTargetText(recoveryTarget))));
-		if (recoveryTargetValue != NULL)
-			ereport(normal_log_level,
-					(errmsg_internal("recovery_target_value = '%s'", recoveryTargetValue)));
-		ereport(normal_log_level,
 				(errmsg_internal("recovery_target_inclusive = '%s'", (recoveryTargetInclusive ? "on " : "off"))));
 
-		if (recoveryTargetTimeLineGoal == RECOVERY_TARGET_TIMELINE_CONTROLFILE)
-			ereport(normal_log_level,
-					(errmsg_internal("recovery_target_timeline = '%u' (from controlfile)",
-									 recoveryTargetTLI)));
-		else if (recoveryTargetTimeLineGoal == RECOVERY_TARGET_TIMELINE_LATEST)
-			ereport(normal_log_level,
-					(errmsg_internal("recovery_target_timeline = 'latest'")));
-		else
+		switch (recoveryTargetTimeLineGoal)
 		{
-			Assert(recoveryTargetTimeLineGoal == RECOVERY_TARGET_TIMELINE_NUMERIC);
-			ereport(normal_log_level,
-					(errmsg_internal("recovery_target_timeline = '%u'",
-									 recoveryTargetTLIRequested)));
+			case RECOVERY_TARGET_TIMELINE_CONTROLFILE:
+				ereport(normal_log_level,
+						(errmsg_internal("recovery_target_timeline = '%u' (from controlfile)",
+										 recoveryTargetTLI)));
+				break;
+			case RECOVERY_TARGET_TIMELINE_LATEST:
+				ereport(normal_log_level,
+						(errmsg_internal("recovery_target_timeline = 'latest'")));
+				break;
+			case RECOVERY_TARGET_TIMELINE_NUMERIC:
+				ereport(normal_log_level,
+						(errmsg_internal("recovery_target_timeline = '%u'",
+										 recoveryTargetTLIRequested)));
+				break;
 		}
 	}
 
@@ -5479,12 +5515,6 @@ validateRecoveryParameters(void)
 {
 	if (!ArchiveRecoveryRequested)
 		return;
-
-	if (recoveryTarget > RECOVERY_TARGET_UNSET &&
-		recoveryTargetValue == NULL)
-		ereport(FATAL,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("must specify recovery_target_value when recovery_target_type is set")));
 
 	/*
 	 * Check for compulsory parameters
@@ -12324,7 +12354,7 @@ CheckForStandbyTrigger(void)
 	if (stat(PromoteTriggerFile, &stat_buf) == 0)
 	{
 		ereport(LOG,
-				(errmsg("promote signal file found: %s", PromoteTriggerFile)));
+				(errmsg("promote trigger file found: %s", PromoteTriggerFile)));
 		unlink(PromoteTriggerFile);
 		triggered = true;
 		fast_promote = true;
@@ -12333,7 +12363,7 @@ CheckForStandbyTrigger(void)
 	else if (errno != ENOENT)
 		ereport(ERROR,
 				(errcode_for_file_access(),
-				 errmsg("could not stat promote signal file \"%s\": %m",
+				 errmsg("could not stat promote trigger file \"%s\": %m",
 						PromoteTriggerFile)));
 
 	return false;

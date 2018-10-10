@@ -66,7 +66,7 @@
        <para>
         The local shell command to execute to retrieve an archived segment of
         the WAL file series. This parameter is required for archive recovery,
-        but optional for standby mode.
+        but optional for streaming replication.
         Any <literal>%f</literal> in the string is
         replaced by the name of the file to retrieve from the archive,
         and any <literal>%p</literal> is replaced by the copy destination path name
@@ -175,101 +175,99 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
     <title>Recovery Target Settings</title>
 
      <para>
-      By default, recovery will process to the end of the WAL log. An earlier
-      stopping point may be specified using <varname>recovery_target_type</varname>
-      and in most cases also <varname>recovery_target_value</varname>, plus the optional
-      parameters <varname>recovery_target_inclusive</varname>,
-      <varname>recovery_target_timeline</varname> and <varname>recovery_target_action</varname>.
+      By default, recovery will recover to the end of the WAL log. The
+      following parameters can be used to specify an earlier stopping point.
+      At most one of <varname>recovery_target</varname>,
+      <varname>recovery_target_lsn</varname>, <varname>recovery_target_name</varname>,
+      <varname>recovery_target_time</varname>, or <varname>recovery_target_xid</varname>
+      can be used; if more than one of these is specified in the configuration
+      file, the last entry will be used.
      </para>
 
      <variablelist>
-      <varlistentry id="recovery-target-type" xreflabel="recovery_target_type">
-       <term><varname>recovery_target_type</varname> (<type>enum</type>)
+     <varlistentry id="recovery-target" xreflabel="recovery_target">
+      <term><varname>recovery_target</varname><literal> = 'immediate'</literal>
       <indexterm>
-        <primary><varname>recovery_target_type</varname> targeted recovery parameter</primary>
+        <primary><varname>recovery_target</varname> recovery parameter</primary>
       </indexterm>
       </term>
       <listitem>
        <para>
-        <varname>recovery_target_type</varname> specifies the search criteria used for a
-        a targeted recovery. The default value is <literal>none</literal>. Valid
-        values are <literal>none</literal>, <literal>immediate</literal>,
-        <literal>name</literal>, <literal>timestamp</literal>,
-        <literal>xid</literal> and <literal>lsn</literal>.
+        This parameter specifies that recovery should end as soon as a
+        consistent state is reached, i.e. as early as possible. When restoring
+        from an online backup, this means the point where taking the backup
+        ended.
        </para>
-
        <para>
-        Target-type <literal>none</literal> specifies that recovery will not stop
-        until it runs out of WAL, which is the default setting. When not in targeted
-        recovery this is the only meaningful setting.
+        Technically, this is a string parameter, but <literal>'immediate'</literal>
+        is currently the only allowed value.
        </para>
+      </listitem>
+     </varlistentry>
 
+     <varlistentry id="recovery-target-name" xreflabel="recovery_target_name">
+      <term><varname>recovery_target_name</varname> (<type>string</type>)
+      <indexterm>
+        <primary><varname>recovery_target_name</varname> recovery parameter</primary>
+      </indexterm>
+      </term>
+      <listitem>
        <para>
-        Target-type <literal>immediate</literal> specifies that recovery should end as
-        soon as a consistent state is reached, i.e. as early as possible. When restoring
-        from an online backup, this means the point where taking the backup ended.
-        For this target-type, no additional target-specifiers influence the stopping
-        point.
+        This parameter specifies the named restore point (created with
+        <function>pg_create_restore_point()</function>) to which recovery will proceed.
        </para>
+      </listitem>
+     </varlistentry>
 
+     <varlistentry id="recovery-target-time" xreflabel="recovery_target_time">
+      <term><varname>recovery_target_time</varname> (<type>timestamp</type>)
+      <indexterm>
+        <primary><varname>recovery_target_time</varname> recovery parameter</primary>
+      </indexterm>
+      </term>
+      <listitem>
        <para>
-        Target-type <literal>name</literal> specifies that recovery will
-        proceed to the point specified by <varname>recovery_target_value</varname>
-        when interpreted as the name of a restore point created with
-        <function>pg_create_restore_point()</function>.
-         The precise stopping point is also influenced by
-        <xref linkend="recovery-target-inclusive"/> and
-        <xref linkend="recovery-target-timeline"/>.
-       </para>
-
-       <para>
-        Target-type <literal>timestamp</literal> specifies that recovery will
-        proceed to the point specified by <varname>recovery_target_value</varname>
-        when interpreted as the timestamp of a transaction commit or abort.
+        This parameter specifies the time stamp up to which recovery
+        will proceed.
         The precise stopping point is also influenced by
-        <xref linkend="recovery-target-inclusive"/> and
-        <xref linkend="recovery-target-timeline"/>.
+        <xref linkend="recovery-target-inclusive"/>.
        </para>
+      </listitem>
+     </varlistentry>
 
+     <varlistentry id="recovery-target-xid" xreflabel="recovery_target_xid">
+      <term><varname>recovery_target_xid</varname> (<type>string</type>)
+      <indexterm>
+        <primary><varname>recovery_target_xid</varname> recovery parameter</primary>
+      </indexterm>
+      </term>
+      <listitem>
        <para>
-        Target-type <literal>xid</literal> specifies that recovery will
-        proceed to the point specified by <varname>recovery_target_value</varname>
-        when interpreted as the transaction ID of a transaction commit or abort.
-        Keep in mind
+        This parameter specifies the transaction ID up to which recovery
+        will proceed. Keep in mind
         that while transaction IDs are assigned sequentially at transaction
         start, transactions can complete in a different numeric order.
         The transactions that will be recovered are those that committed
         before (and optionally including) the specified one.
         The precise stopping point is also influenced by
-        <xref linkend="recovery-target-inclusive"/> and
-        <xref linkend="recovery-target-timeline"/>.
-       </para>
-
-       <para>
-        Target-type <literal>lsn</literal> specifies that recovery will
-        proceed to the point specified by <varname>recovery_target_value</varname>
-        when interpreted as the LSN of any WAL record, parsed using the system
-        data type <link linkend="datatype-pg-lsn"><type>pg_lsn</type></link>.
-        The precise stopping point is also influenced by
-        <xref linkend="recovery-target-inclusive"/> and
-        <xref linkend="recovery-target-timeline"/>.
+        <xref linkend="recovery-target-inclusive"/>.
        </para>
       </listitem>
      </varlistentry>
 
-     <varlistentry id="recovery-target-value"
-                   xreflabel="recovery_target_value">
-      <term><varname>recovery_target_value</varname> (<type>string</type>)
+     <varlistentry id="recovery-target-lsn" xreflabel="recovery_target_lsn">
+      <term><varname>recovery_target_lsn</varname> (<type>pg_lsn</type>)
       <indexterm>
-        <primary><varname>recovery_target_value</varname> targeted recovery search parameter</primary>
+        <primary><varname>recovery_target_lsn</varname> recovery parameter</primary>
       </indexterm>
       </term>
       <listitem>
        <para>
-        Specifies the stopping point for targeted recovery. The string value
-        is interpreted according to strict rules according to the value of
-        <varname>recovery_target_type</varname>. An empty string may be an
-        invalid value in some cases.
+        This parameter specifies the LSN of the write-ahead log location up
+        to which recovery will proceed. The precise stopping point is also
+        influenced by <xref linkend="recovery-target-inclusive"/>. This
+        parameter is parsed using the system data type
+        <link linkend="datatype-pg-lsn"><type>pg_lsn</type></link>.
        </para>
       </listitem>
      </varlistentry>
@@ -293,9 +291,9 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
         Specifies whether to stop just after the specified recovery target
         (<literal>true</literal>), or just before the recovery target
         (<literal>false</literal>).
-        Applies when <xref linkend="recovery-target-type"/> is specified
-        to <literal>lsn</literal>, <literal>timestamp</literal> or
-        <literal>xid</literal>.
+        Applies when <xref linkend="recovery-target-lsn"/>,
+        <xref linkend="recovery-target-time"/>, or
+        <xref linkend="recovery-target-xid"/> is specified.
         This setting controls whether transactions
         having exactly the target WAL location (LSN), commit time, or transaction ID, respectively, will
         be included in the recovery.  Default is <literal>true</literal>.
@@ -420,7 +418,6 @@ restore_command = 'copy "C:\\server\\archivedir\\%f" "%p"'  # Windows
          </para>
         </listitem>
        </varlistentry>
-
        <varlistentry id="primary-slot-name" xreflabel="primary_slot_name">
         <term><varname>primary_slot_name</varname> (<type>string</type>)
         <indexterm>

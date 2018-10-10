@@ -197,15 +197,19 @@ static bool check_cluster_name(char **newval, void **extra, GucSource source);
 static const char *show_unix_socket_permissions(void);
 static const char *show_log_file_mode(void);
 static const char *show_data_directory_mode(void);
-static bool check_recovery_target_type(char **newval, void **extra, GucSource source);
-static void assign_recovery_target_type(const char *newval, void *extra);
-static bool check_recovery_target_value(char **newval, void **extra, GucSource source);
-static void assign_recovery_target_value(const char *newval, void *extra);
 static bool check_recovery_target_timeline(char **newval, void **extra, GucSource source);
 static void assign_recovery_target_timeline(const char *newval, void *extra);
-static bool check_recovery_target_action(char **newval, void **extra, GucSource source);
-static void assign_recovery_target_action(const char *newval, void *extra);
 static bool check_primary_slot_name(char **newval, void **extra, GucSource source);
+static bool check_recovery_target(char **newval, void **extra, GucSource source);
+static void assign_recovery_target(const char *newval, void *extra);
+static bool check_recovery_target_xid(char **newval, void **extra, GucSource source);
+static void assign_recovery_target_xid(const char *newval, void *extra);
+static bool check_recovery_target_time(char **newval, void **extra, GucSource source);
+static void assign_recovery_target_time(const char *newval, void *extra);
+static bool check_recovery_target_name(char **newval, void **extra, GucSource source);
+static void assign_recovery_target_name(const char *newval, void *extra);
+static bool check_recovery_target_lsn(char **newval, void **extra, GucSource source);
+static void assign_recovery_target_lsn(const char *newval, void *extra);
 
 /* Private functions in guc-file.l that need to be called from guc.c */
 static ConfigVariable *ProcessConfigFileInternal(GucContext context,
@@ -445,6 +449,7 @@ static const struct config_enum_entry password_encryption_options[] = {
  */
 extern const struct config_enum_entry wal_level_options[];
 extern const struct config_enum_entry archive_mode_options[];
+extern const struct config_enum_entry recovery_target_action_options[];
 extern const struct config_enum_entry sync_method_options[];
 extern const struct config_enum_entry dynamic_shared_memory_options[];
 
@@ -488,8 +493,6 @@ char	   *IdentFileName;
 char	   *external_pid_file;
 
 char	   *pgstat_temp_directory;
-char	   *recovery_target_timeline_string;
-char	   *recovery_target_action_string;
 
 char	   *application_name;
 
@@ -540,6 +543,13 @@ static int	wal_block_size;
 static bool data_checksums;
 static bool integer_datetimes;
 static bool assert_enabled;
+static char	*recovery_target_timeline_string;
+static char *recovery_target_string;
+static char *recovery_target_xid_string;
+static char *recovery_target_time_string;
+static char *recovery_target_name_string;
+static char *recovery_target_lsn_string;
+
 
 /* should be static, but commands/variable.c needs to get at this */
 char	   *role_string;
@@ -3330,7 +3340,7 @@ static struct config_string ConfigureNamesString[] =
 			NULL
 		},
 		&recoveryRestoreCommand,
-		"",
+		NULL,
 		NULL, NULL, NULL
 	},
 
@@ -3340,7 +3350,7 @@ static struct config_string ConfigureNamesString[] =
 			NULL
 		},
 		&archiveCleanupCommand,
-		"",
+		NULL,
 		NULL, NULL, NULL
 	},
 
@@ -3350,28 +3360,8 @@ static struct config_string ConfigureNamesString[] =
 			NULL
 		},
 		&recoveryEndCommand,
-		"",
+		NULL,
 		NULL, NULL, NULL
-	},
-
-	{
-		{"recovery_target_type", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
-			gettext_noop("Sets the type of desired recovery target."),
-			NULL
-		},
-		&recoveryTargetTypeString,
-		"",
-		check_recovery_target_type, assign_recovery_target_type, NULL
-	},
-
-	{
-		{"recovery_target_value", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
-			gettext_noop("Sets the value of the recovery taregt up to which recovery will proceed."),
-			NULL
-		},
-		&recoveryTargetValue,
-		"",
-		check_recovery_target_value, assign_recovery_target_value, NULL
 	},
 
 	{
@@ -3385,13 +3375,49 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"recovery_target_action", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
-			gettext_noop("Sets the action to perform upon reaching the recovery target."),
+		{"recovery_target", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
+			gettext_noop("Sets recovery should end as soon as a consistent state is reached"),
 			NULL
 		},
-		&recovery_target_action_string,
+		&recovery_target_string,
 		"",
-		check_recovery_target_action, assign_recovery_target_action, NULL
+		check_recovery_target, assign_recovery_target, NULL
+	},
+	{
+		{"recovery_target_xid", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
+			gettext_noop("Sets the transaction ID up to which recovery will proceed"),
+			NULL
+		},
+		&recovery_target_xid_string,
+		"",
+		check_recovery_target_xid, assign_recovery_target_xid, NULL
+	},
+	{
+		{"recovery_target_time", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
+			gettext_noop("Sets the time stamp up to which recovery will proceed"),
+			NULL
+		},
+		&recovery_target_time_string,
+		"",
+		check_recovery_target_time, assign_recovery_target_time, NULL
+	},
+	{
+		{"recovery_target_name", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
+			gettext_noop("Sets the named restore point up to which recovery will proceed"),
+			NULL
+		},
+		&recovery_target_name_string,
+		"",
+		check_recovery_target_name, assign_recovery_target_name, NULL
+	},
+	{
+		{"recovery_target_lsn", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
+			gettext_noop("Sets the LSN of the write-ahead log location up to which recovery will proceed"),
+			NULL
+		},
+		&recovery_target_lsn_string,
+		"",
+		check_recovery_target_lsn, assign_recovery_target_lsn, NULL
 	},
 
 	{
@@ -3421,7 +3447,7 @@ static struct config_string ConfigureNamesString[] =
 			NULL
 		},
 		&PrimarySlotName,
-		"",
+		NULL,
 		check_primary_slot_name, NULL, NULL
 	},
 
@@ -4202,6 +4228,16 @@ static struct config_enum ConfigureNamesEnum[] =
 		},
 		&XLogArchiveMode,
 		ARCHIVE_MODE_OFF, archive_mode_options,
+		NULL, NULL, NULL
+	},
+
+	{
+		{"recovery_target_action", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
+			gettext_noop("Sets the action to perform upon reaching the recovery target."),
+			NULL
+		},
+		&recoveryTargetAction,
+		RECOVERY_TARGET_ACTION_PAUSE, recovery_target_action_options,
 		NULL, NULL, NULL
 	},
 
@@ -10949,218 +10985,6 @@ show_data_directory_mode(void)
 }
 
 static bool
-check_recovery_target_type(char **newval, void **extra, GucSource source)
-{
-	RecoveryTargetType *myextra;
-	RecoveryTargetType rt = RECOVERY_TARGET_UNSET;
-
-	if (strcmp(*newval, "xid") == 0)
-		rt = RECOVERY_TARGET_XID;
-	else if (strcmp(*newval, "timestamp") == 0)
-		rt = RECOVERY_TARGET_TIME;
-	else if (strcmp(*newval, "name") == 0)
-		rt = RECOVERY_TARGET_NAME;
-	else if (strcmp(*newval, "lsn") == 0)
-		rt = RECOVERY_TARGET_LSN;
-	else if (strcmp(*newval, "immediate") == 0)
-		rt = RECOVERY_TARGET_IMMEDIATE;
-	else if (strcmp(*newval, "") != 0)
-	{
-		GUC_check_errdetail("recovery_target_type is not valid: \"%s\"", *newval);
-		return false;
-	}
-
-	myextra = (RecoveryTargetType *) guc_malloc(ERROR, sizeof(RecoveryTargetType));
-	*myextra = rt;
-	*extra = (void *) myextra;
-
-	return true;
-}
-
-static void
-assign_recovery_target_type(const char *newval, void *extra)
-{
-	recoveryTarget = *((RecoveryTargetType *) extra);
-}
-
-static bool
-check_recovery_target_value(char **newval, void **extra, GucSource source)
-{
-	bool		valid = false;
-
-	/*
-	 * Value must be present in some cases, must not be present in others
-	 */
-	if (strcmp(*newval, "") == 0)
-	{
-		if (recoveryTarget == RECOVERY_TARGET_UNSET ||
-			recoveryTarget == RECOVERY_TARGET_IMMEDIATE)
-			valid = true;
-	}
-	else
-	{
-		if (recoveryTarget == RECOVERY_TARGET_UNSET ||
-			recoveryTarget == RECOVERY_TARGET_IMMEDIATE)
-			valid = false;
-		else
-			valid = true;
-	}
-
-	if (!valid)
-	{
-		GUC_check_errdetail("recovery_target_value is not valid: \"%s\"", *newval);
-		return false;
-	}
-
-	/*
-	 * We assume that recovery_target_type has already been parsed since it
-	 * sorts alphabetically before recovery_target_value.
-	 */
-	switch (recoveryTarget)
-	{
-		case RECOVERY_TARGET_UNSET:
-		case RECOVERY_TARGET_IMMEDIATE:
-			/* No value, so do nothing */
-			break;
-
-		case RECOVERY_TARGET_XID:
-			{
-				TransactionId xid;
-				TransactionId *myextra;
-
-				errno = 0;
-				xid = (TransactionId) strtoul(*newval, NULL, 0);
-				if (errno == EINVAL || errno == ERANGE)
-				{
-					GUC_check_errdetail("recovery_target_value is not a valid number: \"%s\"",
-										*newval);
-					return false;
-				}
-
-				myextra = (TransactionId *) guc_malloc(ERROR, sizeof(TransactionId));
-				*myextra = xid;
-				*extra = (void *) myextra;
-			}
-			break;
-
-		case RECOVERY_TARGET_TIME:
-			{
-				TimestampTz time;
-				TimestampTz *myextra;
-				MemoryContext oldcontext = CurrentMemoryContext;
-
-				PG_TRY();
-				{
-					time = DatumGetTimestampTz(DirectFunctionCall3(timestamptz_in,
-																   CStringGetDatum(*newval),
-																   ObjectIdGetDatum(InvalidOid),
-																   Int32GetDatum(-1)));
-				}
-				PG_CATCH();
-				{
-					ErrorData  *edata;
-
-					/* Save error info */
-					MemoryContextSwitchTo(oldcontext);
-					edata = CopyErrorData();
-					FlushErrorState();
-
-					/* Pass the error message */
-					GUC_check_errdetail("%s", edata->message);
-					FreeErrorData(edata);
-					return false;
-				}
-				PG_END_TRY();
-
-				myextra = (TimestampTz *) guc_malloc(ERROR, sizeof(TimestampTz));
-				*myextra = time;
-				*extra = (void *) myextra;
-			}
-			break;
-
-		case RECOVERY_TARGET_NAME:
-			/* Use the value of newval directly */
-			if (strlen(*newval) > MAXRESTOREPOINTNAMELEN)
-			{
-				GUC_check_errdetail("recovery_target_value is too long (maximum %d characters)",
-									MAXRESTOREPOINTNAMELEN);
-				return false;
-			}
-			break;
-
-		case RECOVERY_TARGET_LSN:
-			{
-				XLogRecPtr	lsn;
-				XLogRecPtr *myextra;
-				MemoryContext oldcontext = CurrentMemoryContext;
-
-				/*
-				 * Convert the LSN string given by the user to XLogRecPtr
-				 * form.
-				 */
-				PG_TRY();
-				{
-					lsn =
-						DatumGetLSN(DirectFunctionCall3(pg_lsn_in,
-														CStringGetDatum(*newval),
-														ObjectIdGetDatum(InvalidOid),
-														Int32GetDatum(-1)));
-				}
-				PG_CATCH();
-				{
-					ErrorData  *edata;
-
-					/* Save error info */
-					MemoryContextSwitchTo(oldcontext);
-					edata = CopyErrorData();
-					FlushErrorState();
-
-					/* Pass the error message */
-					GUC_check_errdetail("%s", edata->message);
-					FreeErrorData(edata);
-					return false;
-				}
-				PG_END_TRY();
-
-				myextra = (XLogRecPtr *) guc_malloc(ERROR, sizeof(XLogRecPtr));
-				*myextra = lsn;
-				*extra = (void *) myextra;
-			}
-			break;
-	}
-
-	return true;
-}
-
-static void
-assign_recovery_target_value(const char *newval, void *extra)
-{
-	switch (recoveryTarget)
-	{
-		case RECOVERY_TARGET_UNSET:
-		case RECOVERY_TARGET_IMMEDIATE:
-			break;
-
-		case RECOVERY_TARGET_XID:
-			recoveryTargetXid = *((TransactionId *) extra);
-			break;
-
-		case RECOVERY_TARGET_TIME:
-			recoveryTargetTime = *((TimestampTz *) extra);
-			break;
-
-		case RECOVERY_TARGET_NAME:
-			if (newval && *newval)
-				recoveryTargetName = (char *) newval;
-			break;
-
-		case RECOVERY_TARGET_LSN:
-			recoveryTargetLSN = *((XLogRecPtr *) extra);
-			break;
-	}
-}
-
-static bool
 check_recovery_target_timeline(char **newval, void **extra, GucSource source)
 {
 	RecoveryTargetTimeLineGoal rttg = RECOVERY_TARGET_TIMELINE_CONTROLFILE;
@@ -11172,13 +10996,12 @@ check_recovery_target_timeline(char **newval, void **extra, GucSource source)
 		rttg = RECOVERY_TARGET_TIMELINE_CONTROLFILE;
 	else
 	{
-		errno = 0;
-		/* only validate number here */
-		(void) strtoul(*newval, NULL, 0);
-		if (errno == EINVAL || errno == ERANGE)
+		const char *hintmsg;
+		if (!parse_int(*newval, NULL, 0, &hintmsg))
 		{
-			GUC_check_errdetail("recovery_target_timeline is not a valid number: \"%s\"",
-								*newval);
+			GUC_check_errdetail("recovery_target_timeline is not a valid number");
+			if (hintmsg)
+				GUC_check_errhint("%s", hintmsg);
 			return false;
 		}
 		rttg = RECOVERY_TARGET_TIMELINE_NUMERIC;
@@ -11202,40 +11025,9 @@ assign_recovery_target_timeline(const char *newval, void *extra)
 }
 
 static bool
-check_recovery_target_action(char **newval, void **extra, GucSource source)
-{
-	RecoveryTargetAction rta = RECOVERY_TARGET_ACTION_PAUSE;
-	RecoveryTargetAction *myextra;
-
-	if (strcmp(*newval, "pause") == 0)
-		rta = RECOVERY_TARGET_ACTION_PAUSE;
-	else if (strcmp(*newval, "promote") == 0)
-		rta = RECOVERY_TARGET_ACTION_PROMOTE;
-	else if (strcmp(*newval, "shutdown") == 0)
-		rta = RECOVERY_TARGET_ACTION_SHUTDOWN;
-	else if (strcmp(*newval, "") != 0)
-	{
-		GUC_check_errdetail("recovery_target_action is not valid: \"%s\"", *newval);
-		return false;
-	}
-
-	myextra = (RecoveryTargetAction *) guc_malloc(ERROR, sizeof(RecoveryTargetAction));
-	*myextra = rta;
-	*extra = (void *) myextra;
-
-	return true;
-}
-
-static void
-assign_recovery_target_action(const char *newval, void *extra)
-{
-	recoveryTargetAction = *((RecoveryTargetAction *) extra);
-}
-
-static bool
 check_primary_slot_name(char **newval, void **extra, GucSource source)
 {
-	if (strcmp(*newval, "") != 0 &&
+	if (*newval && strcmp(*newval, "") != 0 &&
 		!ReplicationSlotValidateName(*newval, WARNING))
 	{
 		GUC_check_errdetail("primary_slot_name is not valid: \"%s\"", *newval);
@@ -11243,6 +11035,207 @@ check_primary_slot_name(char **newval, void **extra, GucSource source)
 	}
 
 	return true;
+}
+
+static bool
+check_recovery_target(char **newval, void **extra, GucSource source)
+{
+	if (strcmp(*newval, "immediate") != 0 && strcmp(*newval, "") != 0)
+	{
+		GUC_check_errdetail("The only allowed value is \"immediate\".");
+		return false;
+	}
+	return true;
+}
+
+static void
+assign_recovery_target(const char *newval, void *extra)
+{
+	if (newval && strcmp(newval, "") != 0)
+		recoveryTarget = RECOVERY_TARGET_IMMEDIATE;
+	else
+		/*
+		 * reset recoveryTarget to RECOVERY_TARGET_UNSET to proper handle
+		 * if user set multiple recovery_target with blank value on last
+		 */
+		recoveryTarget = RECOVERY_TARGET_UNSET;
+}
+
+static bool
+check_recovery_target_xid(char **newval, void **extra, GucSource source)
+{
+	if (strcmp(*newval, "") != 0)
+	{
+		TransactionId xid;
+		TransactionId *myextra;
+		errno = 0;
+		xid = (TransactionId) strtoul(*newval, NULL, 0);
+		if (errno == EINVAL || errno == ERANGE)
+		{
+			GUC_check_errdetail("%s",
+								*newval);
+			return false;
+		}
+
+		myextra = (TransactionId *) guc_malloc(ERROR, sizeof(TransactionId));
+		*myextra = xid;
+		*extra = (void *) myextra;
+	}
+	return true;
+}
+
+static void
+assign_recovery_target_xid(const char *newval, void *extra)
+{
+	if (newval && strcmp(newval, "") != 0)
+	{
+		recoveryTarget = RECOVERY_TARGET_XID;
+		recoveryTargetXid = *((TransactionId *) extra);
+	}
+	else
+		recoveryTarget = RECOVERY_TARGET_UNSET;
+}
+
+static bool
+check_recovery_target_time(char **newval, void **extra, GucSource source)
+{
+	if (strcmp(*newval, "") != 0)
+	{
+		TimestampTz time;
+		TimestampTz *myextra;
+		MemoryContext oldcontext = CurrentMemoryContext;
+
+		/* reject some special values */
+		if (strcmp(*newval, "epoch") == 0 ||
+			strcmp(*newval, "infinity") == 0 ||
+			strcmp(*newval, "-infinity") == 0 ||
+			strcmp(*newval, "now") == 0 ||
+			strcmp(*newval, "today") == 0 ||
+			strcmp(*newval, "tomorrow") == 0 ||
+			strcmp(*newval, "yesterday") == 0)
+		{
+			return false;
+		}
+
+		PG_TRY();
+		{
+			time = DatumGetTimestampTz(DirectFunctionCall3(timestamptz_in,
+														   CStringGetDatum(*newval),
+														   ObjectIdGetDatum(InvalidOid),
+														   Int32GetDatum(-1)));
+		}
+		PG_CATCH();
+		{
+			ErrorData  *edata;
+
+			/* Save error info */
+			MemoryContextSwitchTo(oldcontext);
+			edata = CopyErrorData();
+			FlushErrorState();
+
+			/* Pass the error message */
+			GUC_check_errdetail("%s", edata->message);
+			FreeErrorData(edata);
+			return false;
+		}
+		PG_END_TRY();
+
+		myextra = (TimestampTz *) guc_malloc(ERROR, sizeof(TimestampTz));
+		*myextra = time;
+		*extra = (void *) myextra;
+	}
+	return true;
+}
+
+static void
+assign_recovery_target_time(const char *newval, void *extra)
+{
+	if (newval && strcmp(newval, "") != 0)
+	{
+		recoveryTarget = RECOVERY_TARGET_TIME;
+		recoveryTargetTime = *((TimestampTz *) extra);
+	}
+	else
+		recoveryTarget = RECOVERY_TARGET_UNSET;
+}
+
+static bool
+check_recovery_target_name(char **newval, void **extra, GucSource source)
+{
+	/* Use the value of newval directly */
+	if (strlen(*newval) > MAXRESTOREPOINTNAMELEN)
+	{
+		GUC_check_errdetail("recovery_target_name is too long (maximum %d characters)",
+							MAXRESTOREPOINTNAMELEN);
+		return false;
+	}
+	return true;
+}
+
+static void
+assign_recovery_target_name(const char *newval, void *extra)
+{
+	if (newval && strcmp(newval, "") != 0)
+	{
+		recoveryTarget = RECOVERY_TARGET_NAME;
+		recoveryTargetName = (char *) newval;
+	} else
+		recoveryTarget = RECOVERY_TARGET_UNSET;
+}
+
+static bool
+check_recovery_target_lsn(char **newval, void **extra, GucSource source)
+{
+	if (strcmp(*newval, "") != 0)
+	{
+		XLogRecPtr	lsn;
+		XLogRecPtr *myextra;
+		MemoryContext oldcontext = CurrentMemoryContext;
+
+		/*
+		 * Convert the LSN string given by the user to XLogRecPtr
+		 * form.
+		 */
+		PG_TRY();
+		{
+			lsn = DatumGetLSN(DirectFunctionCall3(pg_lsn_in,
+												  CStringGetDatum(*newval),
+												  ObjectIdGetDatum(InvalidOid),
+												  Int32GetDatum(-1)));
+		}
+		PG_CATCH();
+		{
+			ErrorData  *edata;
+
+			/* Save error info */
+			MemoryContextSwitchTo(oldcontext);
+			edata = CopyErrorData();
+			FlushErrorState();
+
+			/* Pass the error message */
+			GUC_check_errdetail("%s", edata->message);
+			FreeErrorData(edata);
+			return false;
+		}
+		PG_END_TRY();
+
+		myextra = (XLogRecPtr *) guc_malloc(ERROR, sizeof(XLogRecPtr));
+		*myextra = lsn;
+		*extra = (void *) myextra;
+	}
+	return true;
+}
+
+static void
+assign_recovery_target_lsn(const char *newval, void *extra)
+{
+	if (newval && strcmp(newval, "") != 0)
+	{
+		recoveryTarget = RECOVERY_TARGET_LSN;
+		recoveryTargetLSN = *((XLogRecPtr *) extra);
+	}
+	else
+		recoveryTarget = RECOVERY_TARGET_UNSET;
 }
 
 #include "guc-file.c"

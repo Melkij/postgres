@@ -87,15 +87,6 @@ typedef enum
 	RECOVERY_TARGET_IMMEDIATE
 } RecoveryTargetType;
 
-#define RecoveryTargetText(t) ( \
-	t == RECOVERY_TARGET_UNSET ? "unset" : ( \
-	t == RECOVERY_TARGET_XID   ? "xid" : ( \
-	t == RECOVERY_TARGET_TIME  ? "timestamp" : ( \
-	t == RECOVERY_TARGET_NAME  ? "name" : ( \
-	t == RECOVERY_TARGET_LSN   ? "lsn" : ( \
-	t == RECOVERY_TARGET_IMMEDIATE ? "immediate" : \
-					"none" ))))))
-
 /*
  * Recovery target action.
  */
@@ -156,7 +147,7 @@ extern char *recoveryTargetTypeString;
 extern RecoveryTargetType recoveryTarget;
 extern char *recoveryTargetValue;
 extern bool recoveryTargetInclusive;
-extern RecoveryTargetAction recoveryTargetAction;
+extern int recoveryTargetAction;
 extern TransactionId recoveryTargetXid;
 extern TimestampTz recoveryTargetTime;
 extern char *recoveryTargetName;

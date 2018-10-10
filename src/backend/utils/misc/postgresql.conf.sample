@@ -240,9 +240,11 @@
 
 # Set these only when performing a targeted recovery
 
-#recovery_target_type=''	# 'xid', 'time', 'name', 'lsn',
-				# or 'immediate'
-#recovery_target_value=''	# value interpreted according to type
+#recovery_target='' #
+#recovery_target_name='' #
+#recovery_target_time='' #
+#recovery_target_xid='' #
+#recovery_target_lsn='' #
 #recovery_target_inclusive = on
 #recovery_target_timeline = ''	# unset means read from controlfile (default),
 				# or set to 'latest' or timeline ID
