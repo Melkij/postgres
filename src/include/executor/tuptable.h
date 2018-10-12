@@ -125,7 +125,7 @@ typedef struct TupleTableSlot
 	MemoryContext tts_mcxt;		/* slot itself is in this context */
 	Buffer		tts_buffer;		/* tuple's buffer, or InvalidBuffer */
 #define FIELDNO_TUPLETABLESLOT_NVALID 9
-	int			tts_nvalid;		/* # of valid values in tts_values */
+	AttrNumber	tts_nvalid;		/* # of valid values in tts_values */
 #define FIELDNO_TUPLETABLESLOT_VALUES 10
 	Datum	   *tts_values;		/* current per-attribute values */
 #define FIELDNO_TUPLETABLESLOT_ISNULL 11
@@ -153,10 +153,12 @@ extern void ExecResetTupleTable(List *tupleTable, bool shouldFree);
 extern TupleTableSlot *MakeSingleTupleTableSlot(TupleDesc tupdesc);
 extern void ExecDropSingleTupleTableSlot(TupleTableSlot *slot);
 extern void ExecSetSlotDescriptor(TupleTableSlot *slot, TupleDesc tupdesc);
-extern TupleTableSlot *ExecStoreTuple(HeapTuple tuple,
-			   TupleTableSlot *slot,
-			   Buffer buffer,
-			   bool shouldFree);
+extern TupleTableSlot *ExecStoreHeapTuple(HeapTuple tuple,
+				   TupleTableSlot *slot,
+				   bool shouldFree);
+extern TupleTableSlot *ExecStoreBufferHeapTuple(HeapTuple tuple,
+						 TupleTableSlot *slot,
+						 Buffer buffer);
 extern TupleTableSlot *ExecStoreMinimalTuple(MinimalTuple mtup,
 					  TupleTableSlot *slot,
 					  bool shouldFree);
@@ -174,11 +176,26 @@ extern TupleTableSlot *ExecCopySlot(TupleTableSlot *dstslot,
 
 /* in access/common/heaptuple.c */
 extern Datum slot_getattr(TupleTableSlot *slot, int attnum, bool *isnull);
-extern void slot_getallattrs(TupleTableSlot *slot);
 extern void slot_getsomeattrs(TupleTableSlot *slot, int attnum);
 extern bool slot_attisnull(TupleTableSlot *slot, int attnum);
 extern bool slot_getsysattr(TupleTableSlot *slot, int attnum,
 				Datum *value, bool *isnull);
 extern void slot_getmissingattrs(TupleTableSlot *slot, int startAttNum, int lastAttNum);
+
+#ifndef FRONTEND
+
+/*
+ * slot_getallattrs
+ *		This function forces all the entries of the slot's Datum/isnull
+ *		arrays to be valid.  The caller may then extract data directly
+ *		from those arrays instead of using slot_getattr.
+ */
+static inline void
+slot_getallattrs(TupleTableSlot *slot)
+{
+	slot_getsomeattrs(slot, slot->tts_tupleDescriptor->natts);
+}
+
+#endif
 
 #endif							/* TUPTABLE_H */

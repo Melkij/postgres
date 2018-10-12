@@ -513,7 +513,17 @@ extern void ExecCreateScanSlotFromOuterPlan(EState *estate, ScanState *scanstate
 extern bool ExecRelationIsTargetRelation(EState *estate, Index scanrelid);
 
 extern Relation ExecOpenScanRelation(EState *estate, Index scanrelid, int eflags);
-extern void ExecCloseScanRelation(Relation scanrel);
+
+extern void ExecInitRangeTable(EState *estate, List *rangeTable);
+
+static inline RangeTblEntry *
+exec_rt_fetch(Index rti, EState *estate)
+{
+	Assert(rti > 0 && rti <= estate->es_range_table_size);
+	return estate->es_range_table_array[rti - 1];
+}
+
+extern Relation ExecGetRangeTableRelation(EState *estate, Index rti);
 
 extern int	executor_errposition(EState *estate, int location);
 
@@ -523,8 +533,6 @@ extern void RegisterExprContextCallback(ExprContext *econtext,
 extern void UnregisterExprContextCallback(ExprContext *econtext,
 							  ExprContextCallbackFunction function,
 							  Datum arg);
-
-extern void ExecLockNonLeafAppendTables(List *partitioned_rels, EState *estate);
 
 extern Datum GetAttributeByName(HeapTupleHeader tuple, const char *attname,
 				   bool *isNull);

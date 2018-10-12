@@ -202,7 +202,7 @@ static NamedTuplestoreScan *make_namedtuplestorescan(List *qptlist, List *qpqual
 static WorkTableScan *make_worktablescan(List *qptlist, List *qpqual,
 				   Index scanrelid, int wtParam);
 static Append *make_append(List *appendplans, int first_partial_plan,
-			List *tlist, List *partitioned_rels, List *partpruneinfos);
+			List *tlist, PartitionPruneInfo *partpruneinfo);
 static RecursiveUnion *make_recursive_union(List *tlist,
 					 Plan *lefttree,
 					 Plan *righttree,
@@ -278,7 +278,7 @@ static Result *make_result(List *tlist, Node *resconstantqual, Plan *subplan);
 static ProjectSet *make_project_set(List *tlist, Plan *subplan);
 static ModifyTable *make_modifytable(PlannerInfo *root,
 				 CmdType operation, bool canSetTag,
-				 Index nominalRelation, List *partitioned_rels,
+				 Index nominalRelation, Index rootRelation,
 				 bool partColsUpdated,
 				 List *resultRelations, List *subplans, List *subroots,
 				 List *withCheckOptionLists, List *returningLists,
@@ -1030,7 +1030,7 @@ create_append_plan(PlannerInfo *root, AppendPath *best_path)
 	List	   *subplans = NIL;
 	ListCell   *subpaths;
 	RelOptInfo *rel = best_path->path.parent;
-	List	   *partpruneinfos = NIL;
+	PartitionPruneInfo *partpruneinfo = NULL;
 
 	/*
 	 * The subpaths list could be empty, if every child was proven empty by
@@ -1070,8 +1070,8 @@ create_append_plan(PlannerInfo *root, AppendPath *best_path)
 
 	/*
 	 * If any quals exist, they may be useful to perform further partition
-	 * pruning during execution.  Gather information needed by the executor
-	 * to do partition pruning.
+	 * pruning during execution.  Gather information needed by the executor to
+	 * do partition pruning.
 	 */
 	if (enable_partition_pruning &&
 		rel->reloptkind == RELOPT_BASEREL &&
@@ -1093,10 +1093,11 @@ create_append_plan(PlannerInfo *root, AppendPath *best_path)
 		}
 
 		if (prunequal != NIL)
-			partpruneinfos =
-				make_partition_pruneinfo(root,
+			partpruneinfo =
+				make_partition_pruneinfo(root, rel,
+										 best_path->subpaths,
 										 best_path->partitioned_rels,
-										 best_path->subpaths, prunequal);
+										 prunequal);
 	}
 
 	/*
@@ -1107,8 +1108,7 @@ create_append_plan(PlannerInfo *root, AppendPath *best_path)
 	 */
 
 	plan = make_append(subplans, best_path->first_partial_path,
-					   tlist, best_path->partitioned_rels,
-					   partpruneinfos);
+					   tlist, partpruneinfo);
 
 	copy_generic_path_info(&plan->plan, (Path *) best_path);
 
@@ -1132,7 +1132,7 @@ create_merge_append_plan(PlannerInfo *root, MergeAppendPath *best_path)
 	List	   *subplans = NIL;
 	ListCell   *subpaths;
 	RelOptInfo *rel = best_path->path.parent;
-	List	   *partpruneinfos = NIL;
+	PartitionPruneInfo *partpruneinfo = NULL;
 
 	/*
 	 * We don't have the actual creation of the MergeAppend node split out
@@ -1220,8 +1220,8 @@ create_merge_append_plan(PlannerInfo *root, MergeAppendPath *best_path)
 
 	/*
 	 * If any quals exist, they may be useful to perform further partition
-	 * pruning during execution.  Gather information needed by the executor
-	 * to do partition pruning.
+	 * pruning during execution.  Gather information needed by the executor to
+	 * do partition pruning.
 	 */
 	if (enable_partition_pruning &&
 		rel->reloptkind == RELOPT_BASEREL &&
@@ -1244,14 +1244,14 @@ create_merge_append_plan(PlannerInfo *root, MergeAppendPath *best_path)
 		}
 
 		if (prunequal != NIL)
-			partpruneinfos = make_partition_pruneinfo(root,
-													  best_path->partitioned_rels,
-													  best_path->subpaths, prunequal);
+			partpruneinfo = make_partition_pruneinfo(root, rel,
+													 best_path->subpaths,
+													 best_path->partitioned_rels,
+													 prunequal);
 	}
 
-	node->partitioned_rels = best_path->partitioned_rels;
 	node->mergeplans = subplans;
-	node->part_prune_infos = partpruneinfos;
+	node->part_prune_info = partpruneinfo;
 
 	return (Plan *) node;
 }
@@ -2406,7 +2406,7 @@ create_modifytable_plan(PlannerInfo *root, ModifyTablePath *best_path)
 							best_path->operation,
 							best_path->canSetTag,
 							best_path->nominalRelation,
-							best_path->partitioned_rels,
+							best_path->rootRelation,
 							best_path->partColsUpdated,
 							best_path->resultRelations,
 							subplans,
@@ -5342,8 +5342,7 @@ make_foreignscan(List *qptlist,
 
 static Append *
 make_append(List *appendplans, int first_partial_plan,
-			List *tlist, List *partitioned_rels,
-			List *partpruneinfos)
+			List *tlist, PartitionPruneInfo *partpruneinfo)
 {
 	Append	   *node = makeNode(Append);
 	Plan	   *plan = &node->plan;
@@ -5354,8 +5353,7 @@ make_append(List *appendplans, int first_partial_plan,
 	plan->righttree = NULL;
 	node->appendplans = appendplans;
 	node->first_partial_plan = first_partial_plan;
-	node->partitioned_rels = partitioned_rels;
-	node->part_prune_infos = partpruneinfos;
+	node->part_prune_info = partpruneinfo;
 	return node;
 }
 
@@ -6483,7 +6481,7 @@ make_project_set(List *tlist,
 static ModifyTable *
 make_modifytable(PlannerInfo *root,
 				 CmdType operation, bool canSetTag,
-				 Index nominalRelation, List *partitioned_rels,
+				 Index nominalRelation, Index rootRelation,
 				 bool partColsUpdated,
 				 List *resultRelations, List *subplans, List *subroots,
 				 List *withCheckOptionLists, List *returningLists,
@@ -6512,7 +6510,7 @@ make_modifytable(PlannerInfo *root,
 	node->operation = operation;
 	node->canSetTag = canSetTag;
 	node->nominalRelation = nominalRelation;
-	node->partitioned_rels = partitioned_rels;
+	node->rootRelation = rootRelation;
 	node->partColsUpdated = partColsUpdated;
 	node->resultRelations = resultRelations;
 	node->resultRelIndex = -1;	/* will be set correctly in setrefs.c */

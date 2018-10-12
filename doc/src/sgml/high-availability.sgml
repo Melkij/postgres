@@ -738,7 +738,7 @@ protocol to make nodes agree on a serializable transactional order.
     A simple example of a <filename>recovery.conf</filename> is:
 <programlisting>
 standby_mode = 'on'
-primary_conninfo = 'host=192.168.1.50 port=5432 user=foo password=foopass'
+primary_conninfo = 'host=192.168.1.50 port=5432 user=foo password=foopass options=''-c wal_sender_timeout=5000'''
 restore_command = 'cp /path/to/archive/%f %p'
 archive_cleanup_command = 'pg_archivecleanup /path/to/archive %r'
 </programlisting>
@@ -966,10 +966,10 @@ postgres=# SELECT * FROM pg_create_physical_replication_slot('node_a_slot');
 -------------+-----
  node_a_slot |
 
-postgres=# SELECT * FROM pg_replication_slots;
-  slot_name  | slot_type | datoid | database | active | xmin | restart_lsn | confirmed_flush_lsn
--------------+-----------+--------+----------+--------+------+-------------+---------------------
- node_a_slot | physical  |        |          | f      |      |             |
+postgres=# SELECT slot_name, slot_type, active FROM pg_replication_slots;
+  slot_name  | slot_type | active 
+-------------+-----------+--------
+ node_a_slot | physical  | f
 (1 row)
 </programlisting>
      To configure the standby to use this slot, <varname>primary_slot_name</varname>

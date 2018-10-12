@@ -1609,6 +1609,7 @@ SnapBuildSerialize(SnapBuild *builder, XLogRecPtr lsn)
 		ereport(ERROR,
 				(errmsg("could not open file \"%s\": %m", path)));
 
+	errno = 0;
 	pgstat_report_wait_start(WAIT_EVENT_SNAPBUILD_WRITE);
 	if ((write(fd, ondisk, needed_length)) != needed_length)
 	{
@@ -1736,7 +1737,8 @@ SnapBuildRestore(SnapBuild *builder, XLogRecPtr lsn)
 		}
 		else
 			ereport(ERROR,
-					(errmsg("could not read file \"%s\": read %d of %zu",
+					(errcode(ERRCODE_DATA_CORRUPTED),
+					 errmsg("could not read file \"%s\": read %d of %zu",
 							path, readBytes,
 							(Size) SnapBuildOnDiskConstantSize)));
 	}
@@ -1775,7 +1777,8 @@ SnapBuildRestore(SnapBuild *builder, XLogRecPtr lsn)
 		}
 		else
 			ereport(ERROR,
-					(errmsg("could not read file \"%s\": read %d of %zu",
+					(errcode(ERRCODE_DATA_CORRUPTED),
+					 errmsg("could not read file \"%s\": read %d of %zu",
 							path, readBytes, sizeof(SnapBuild))));
 	}
 	COMP_CRC32C(checksum, &ondisk.builder, sizeof(SnapBuild));
@@ -1802,7 +1805,8 @@ SnapBuildRestore(SnapBuild *builder, XLogRecPtr lsn)
 		}
 		else
 			ereport(ERROR,
-					(errmsg("could not read file \"%s\": read %d of %zu",
+					(errcode(ERRCODE_DATA_CORRUPTED),
+					 errmsg("could not read file \"%s\": read %d of %zu",
 							path, readBytes, sz)));
 	}
 	COMP_CRC32C(checksum, ondisk.builder.was_running.was_xip, sz);
@@ -1828,7 +1832,8 @@ SnapBuildRestore(SnapBuild *builder, XLogRecPtr lsn)
 		}
 		else
 			ereport(ERROR,
-					(errmsg("could not read file \"%s\": read %d of %zu",
+					(errcode(ERRCODE_DATA_CORRUPTED),
+					 errmsg("could not read file \"%s\": read %d of %zu",
 							path, readBytes, sz)));
 	}
 	COMP_CRC32C(checksum, ondisk.builder.committed.xip, sz);

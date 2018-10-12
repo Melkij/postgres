@@ -33,6 +33,7 @@
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/datetime.h"
+#include "utils/float.h"
 
 /*
  * gcc's -ffast-math switch breaks routines that expect exact results from
@@ -480,8 +481,8 @@ parse_sane_timezone(struct pg_tm *tm, text *zone)
 	if (isdigit((unsigned char) *tzname))
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("invalid input syntax for numeric time zone: \"%s\"",
-						tzname),
+				 errmsg("invalid input syntax for type %s: \"%s\"",
+						"numeric time zone", tzname),
 				 errhint("Numeric time zones must have \"-\" or \"+\" as first character.")));
 
 	rt = DecodeTimezone(tzname, &tz);
@@ -1606,6 +1607,26 @@ GetSQLLocalTimestamp(int32 typmod)
 	if (typmod >= 0)
 		AdjustTimestampForTypmod(&ts, typmod);
 	return ts;
+}
+
+/*
+ * timeofday(*) -- returns the current time as a text.
+ */
+Datum
+timeofday(PG_FUNCTION_ARGS)
+{
+	struct timeval tp;
+	char		templ[128];
+	char		buf[128];
+	pg_time_t	tt;
+
+	gettimeofday(&tp, NULL);
+	tt = (pg_time_t) tp.tv_sec;
+	pg_strftime(templ, sizeof(templ), "%a %b %d %H:%M:%S.%%06d %Y %Z",
+				pg_localtime(&tt, session_timezone));
+	snprintf(buf, sizeof(buf), templ, tp.tv_usec);
+
+	PG_RETURN_TEXT_P(cstring_to_text(buf));
 }
 
 /*

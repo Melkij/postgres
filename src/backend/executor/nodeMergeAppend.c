@@ -76,12 +76,6 @@ ExecInitMergeAppend(MergeAppend *node, EState *estate, int eflags)
 	Assert(!(eflags & (EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK)));
 
 	/*
-	 * Lock the non-leaf tables in the partition tree controlled by this node.
-	 * It's a no-op for non-partitioned parent tables.
-	 */
-	ExecLockNonLeafAppendTables(node->partitioned_rels, estate);
-
-	/*
 	 * create new MergeAppendState for our node
 	 */
 	mergestate->ps.plan = (Plan *) node;
@@ -90,7 +84,7 @@ ExecInitMergeAppend(MergeAppend *node, EState *estate, int eflags)
 	mergestate->ms_noopscan = false;
 
 	/* If run-time partition pruning is enabled, then set that up now */
-	if (node->part_prune_infos != NIL)
+	if (node->part_prune_info != NULL)
 	{
 		PartitionPruneState *prunestate;
 
@@ -98,7 +92,7 @@ ExecInitMergeAppend(MergeAppend *node, EState *estate, int eflags)
 		ExecAssignExprContext(estate, &mergestate->ps);
 
 		prunestate = ExecCreatePartitionPruneState(&mergestate->ps,
-												   node->part_prune_infos);
+												   node->part_prune_info);
 		mergestate->ms_prune_state = prunestate;
 
 		/* Perform an initial partition prune, if required. */
@@ -131,6 +125,7 @@ ExecInitMergeAppend(MergeAppend *node, EState *estate, int eflags)
 		{
 			/* We'll need to initialize all subplans */
 			nplans = list_length(node->mergeplans);
+			Assert(nplans > 0);
 			validsubplans = bms_add_range(NULL, 0, nplans - 1);
 		}
 
@@ -139,7 +134,10 @@ ExecInitMergeAppend(MergeAppend *node, EState *estate, int eflags)
 		 * immediately, preventing later calls to ExecFindMatchingSubPlans.
 		 */
 		if (!prunestate->do_exec_prune)
+		{
+			Assert(nplans > 0);
 			mergestate->ms_valid_subplans = bms_add_range(NULL, 0, nplans - 1);
+		}
 	}
 	else
 	{
@@ -149,6 +147,7 @@ ExecInitMergeAppend(MergeAppend *node, EState *estate, int eflags)
 		 * When run-time partition pruning is not enabled we can just mark all
 		 * subplans as valid; they must also all be initialized.
 		 */
+		Assert(nplans > 0);
 		mergestate->ms_valid_subplans = validsubplans =
 			bms_add_range(NULL, 0, nplans - 1);
 		mergestate->ms_prune_state = NULL;
@@ -333,7 +332,10 @@ heap_compare_slots(Datum a, Datum b, void *arg)
 									  datum2, isNull2,
 									  sortKey);
 		if (compare != 0)
-			return -compare;
+		{
+			INVERT_COMPARE_RESULT(compare);
+			return compare;
+		}
 	}
 	return 0;
 }
@@ -364,12 +366,6 @@ ExecEndMergeAppend(MergeAppendState *node)
 	 */
 	for (i = 0; i < nplans; i++)
 		ExecEndNode(mergeplans[i]);
-
-	/*
-	 * release any resources associated with run-time pruning
-	 */
-	if (node->ms_prune_state)
-		ExecDestroyPartitionPruneState(node->ms_prune_state);
 }
 
 void
