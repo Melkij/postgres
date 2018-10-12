@@ -88,7 +88,7 @@ SeqNext(SeqScanState *node)
 	 * refcount will not be dropped until the tuple table slot is cleared.
 	 */
 	if (tuple)
-		ExecStoreBufferHeapTuple(tuple,	/* tuple to store */
+		ExecStoreBufferHeapTuple(tuple, /* tuple to store */
 								 slot,	/* slot to store in */
 								 scandesc->rs_cbuf);	/* buffer associated
 														 * with this tuple */
@@ -163,10 +163,7 @@ ExecInitSeqScan(SeqScan *node, EState *estate, int eflags)
 	ExecAssignExprContext(estate, &scanstate->ss.ps);
 
 	/*
-	 * Initialize scan relation.
-	 *
-	 * Get the relation object id from the relid'th entry in the range table,
-	 * open that relation and acquire appropriate lock on it.
+	 * open the scan relation
 	 */
 	scanstate->ss.ss_currentRelation =
 		ExecOpenScanRelation(estate,
@@ -201,13 +198,11 @@ ExecInitSeqScan(SeqScan *node, EState *estate, int eflags)
 void
 ExecEndSeqScan(SeqScanState *node)
 {
-	Relation	relation;
 	HeapScanDesc scanDesc;
 
 	/*
 	 * get information from node
 	 */
-	relation = node->ss.ss_currentRelation;
 	scanDesc = node->ss.ss_currentScanDesc;
 
 	/*
@@ -226,11 +221,6 @@ ExecEndSeqScan(SeqScanState *node)
 	 */
 	if (scanDesc != NULL)
 		heap_endscan(scanDesc);
-
-	/*
-	 * close the heap relation.
-	 */
-	ExecCloseScanRelation(relation);
 }
 
 /* ----------------------------------------------------------------

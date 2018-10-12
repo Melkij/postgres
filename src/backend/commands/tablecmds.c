@@ -7074,7 +7074,7 @@ ATExecAddIndexConstraint(AlteredTableInfo *tab, Relation rel,
 
 	/* Extra checks needed if making primary key */
 	if (stmt->primary)
-		index_check_primary_key(rel, indexInfo, true);
+		index_check_primary_key(rel, indexInfo, true, stmt);
 
 	/* Note we currently don't support EXCLUSION constraints here */
 	if (stmt->primary)
@@ -7365,12 +7365,14 @@ ATAddForeignKeyConstraint(List **wqueue, AlteredTableInfo *tab, Relation rel,
 		if (!recurse)
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 errmsg("foreign key referencing partitioned table \"%s\" must not be ONLY",
+					 errmsg("cannot use ONLY for foreign key on partitioned table \"%s\" referencing relation \"%s\"",
+							RelationGetRelationName(rel),
 							RelationGetRelationName(pkrel))));
 		if (fkconstraint->skip_validation && !fkconstraint->initially_valid)
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 errmsg("cannot add NOT VALID foreign key to relation \"%s\"",
+					 errmsg("cannot add NOT VALID foreign key on partitioned table \"%s\" referencing relation \"%s\"",
+							RelationGetRelationName(rel),
 							RelationGetRelationName(pkrel)),
 					 errdetail("This feature is not yet supported on partitioned tables.")));
 	}
@@ -14247,9 +14249,6 @@ ATExecAttachPartition(List **wqueue, Relation rel, PartitionCmd *cmd)
 						trigger_name, RelationGetRelationName(attachrel)),
 				 errdetail("ROW triggers with transition tables are not supported on partitions")));
 
-	/* OK to create inheritance.  Rest of the checks performed there */
-	CreateInheritance(attachrel, rel);
-
 	/*
 	 * Check that the new partition's bound is valid and does not overlap any
 	 * of existing partitions of the parent - note that it does not return on
@@ -14257,6 +14256,9 @@ ATExecAttachPartition(List **wqueue, Relation rel, PartitionCmd *cmd)
 	 */
 	check_new_partition_bound(RelationGetRelationName(attachrel), rel,
 							  cmd->bound);
+
+	/* OK to create inheritance.  Rest of the checks performed there */
+	CreateInheritance(attachrel, rel);
 
 	/* Update the pg_class entry. */
 	StorePartitionBound(attachrel, rel, cmd->bound);
@@ -14275,21 +14277,21 @@ ATExecAttachPartition(List **wqueue, Relation rel, PartitionCmd *cmd)
 							   RelationGetRelid(attachrel), &cloned);
 	foreach(l, cloned)
 	{
-		ClonedConstraint *cloned = lfirst(l);
+		ClonedConstraint *clonedcon = lfirst(l);
 		NewConstraint *newcon;
 		Relation	clonedrel;
 		AlteredTableInfo *parttab;
 
-		clonedrel = relation_open(cloned->relid, NoLock);
+		clonedrel = relation_open(clonedcon->relid, NoLock);
 		parttab = ATGetQueueEntry(wqueue, clonedrel);
 
 		newcon = (NewConstraint *) palloc0(sizeof(NewConstraint));
-		newcon->name = cloned->constraint->conname;
+		newcon->name = clonedcon->constraint->conname;
 		newcon->contype = CONSTR_FOREIGN;
-		newcon->refrelid = cloned->refrelid;
-		newcon->refindid = cloned->conindid;
-		newcon->conid = cloned->conid;
-		newcon->qual = (Node *) cloned->constraint;
+		newcon->refrelid = clonedcon->refrelid;
+		newcon->refindid = clonedcon->conindid;
+		newcon->conid = clonedcon->conid;
+		newcon->qual = (Node *) clonedcon->constraint;
 
 		parttab->constraints = lappend(parttab->constraints, newcon);
 

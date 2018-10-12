@@ -49,7 +49,6 @@
  *	- better number building (formatting) / parsing, now it isn't
  *		  ideal code
  *	- use Assert()
- *	- add support for abstime
  *	- add support for roman number to standard number conversion
  *	- add support for number spelling
  *	- add support for string to string formatting (we must be better
@@ -5731,7 +5730,7 @@ float4_to_char(PG_FUNCTION_ARGS)
 		numstr = orgnum = int_to_roman((int) rint(value));
 	else if (IS_EEEE(&Num))
 	{
-		if (isnan(value) || is_infinite(value))
+		if (isnan(value) || isinf(value))
 		{
 			/*
 			 * Allow 6 characters for the leading sign, the decimal point,
@@ -5835,7 +5834,7 @@ float8_to_char(PG_FUNCTION_ARGS)
 		numstr = orgnum = int_to_roman((int) rint(value));
 	else if (IS_EEEE(&Num))
 	{
-		if (isnan(value) || is_infinite(value))
+		if (isnan(value) || isinf(value))
 		{
 			/*
 			 * Allow 6 characters for the leading sign, the decimal point,

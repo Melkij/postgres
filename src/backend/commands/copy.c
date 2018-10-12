@@ -2471,7 +2471,7 @@ CopyFrom(CopyState cstate)
 	resultRelInfo = makeNode(ResultRelInfo);
 	InitResultRelInfo(resultRelInfo,
 					  cstate->rel,
-					  1,		/* dummy rangetable index */
+					  1,		/* must match rel's position in range_table */
 					  NULL,
 					  0);
 	target_resultRelInfo = resultRelInfo;
@@ -2484,7 +2484,8 @@ CopyFrom(CopyState cstate)
 	estate->es_result_relations = resultRelInfo;
 	estate->es_num_result_relations = 1;
 	estate->es_result_relation_info = resultRelInfo;
-	estate->es_range_table = cstate->range_table;
+
+	ExecInitRangeTable(estate, cstate->range_table);
 
 	/* Set up a tuple slot too */
 	myslot = ExecInitExtraTupleSlot(estate, tupDesc);

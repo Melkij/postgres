@@ -380,7 +380,7 @@ TidNext(TidScanState *node)
 			 * Store the scanned tuple in the scan tuple slot of the scan
 			 * state.  Eventually we will only do this and not return a tuple.
 			 */
-			ExecStoreBufferHeapTuple(tuple,	/* tuple to store */
+			ExecStoreBufferHeapTuple(tuple, /* tuple to store */
 									 slot,	/* slot to store in */
 									 buffer);	/* buffer associated with
 												 * tuple */
@@ -489,11 +489,6 @@ ExecEndTidScan(TidScanState *node)
 	 */
 	ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
 	ExecClearTuple(node->ss.ss_ScanTupleSlot);
-
-	/*
-	 * close the heap relation.
-	 */
-	ExecCloseScanRelation(node->ss.ss_currentRelation);
 }
 
 /* ----------------------------------------------------------------
@@ -536,7 +531,7 @@ ExecInitTidScan(TidScan *node, EState *estate, int eflags)
 	tidstate->tss_TidPtr = -1;
 
 	/*
-	 * open the base relation and acquire appropriate lock on it.
+	 * open the scan relation
 	 */
 	currentRelation = ExecOpenScanRelation(estate, node->scan.scanrelid, eflags);
 

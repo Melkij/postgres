@@ -943,7 +943,7 @@ ProcessUtilitySlow(ParseState *pstate,
 {
 	Node	   *parsetree = pstmt->utilityStmt;
 	bool		isTopLevel = (context == PROCESS_UTILITY_TOPLEVEL);
-	bool		isCompleteQuery = (context <= PROCESS_UTILITY_QUERY);
+	bool		isCompleteQuery = (context != PROCESS_UTILITY_SUBCOMMAND);
 	bool		needCleanup;
 	bool		commandCollected = false;
 	ObjectAddress address;
@@ -1439,7 +1439,7 @@ ProcessUtilitySlow(ParseState *pstate,
 				break;
 
 			case T_AlterEnumStmt:	/* ALTER TYPE (enum) */
-				address = AlterEnum((AlterEnumStmt *) parsetree, isTopLevel);
+				address = AlterEnum((AlterEnumStmt *) parsetree);
 				break;
 
 			case T_ViewStmt:	/* CREATE VIEW */

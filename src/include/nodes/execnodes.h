@@ -34,8 +34,10 @@
 
 struct PlanState;				/* forward references in this file */
 struct ParallelHashJoinState;
+struct ExecRowMark;
 struct ExprState;
 struct ExprContext;
+struct RangeTblEntry;			/* avoid including parsenodes.h here */
 struct ExprEvalStep;			/* avoid including execExpr.h everywhere */
 
 
@@ -386,12 +388,19 @@ typedef struct OnConflictSetState
  * Whenever we update an existing relation, we have to update indexes on the
  * relation, and perhaps also fire triggers.  ResultRelInfo holds all the
  * information needed about a result relation, including indexes.
+ *
+ * Normally, a ResultRelInfo refers to a table that is in the query's
+ * range table; then ri_RangeTableIndex is the RT index and ri_RelationDesc
+ * is just a copy of the relevant es_relations[] entry.  But sometimes,
+ * in ResultRelInfos used only for triggers, ri_RangeTableIndex is zero
+ * and ri_RelationDesc is a separately-opened relcache pointer that needs
+ * to be separately closed.  See ExecGetTriggerResultRel.
  */
 typedef struct ResultRelInfo
 {
 	NodeTag		type;
 
-	/* result relation's range table index */
+	/* result relation's range table index, or 0 if not in range table */
 	Index		ri_RangeTableIndex;
 
 	/* relation descriptor for result relation */
@@ -479,6 +488,12 @@ typedef struct EState
 	Snapshot	es_snapshot;	/* time qual to use */
 	Snapshot	es_crosscheck_snapshot; /* crosscheck time qual for RI */
 	List	   *es_range_table; /* List of RangeTblEntry */
+	struct RangeTblEntry **es_range_table_array;	/* equivalent array */
+	Index		es_range_table_size;	/* size of the range table arrays */
+	Relation   *es_relations;	/* Array of per-range-table-entry Relation
+								 * pointers, or NULL if not yet opened */
+	struct ExecRowMark **es_rowmarks;	/* Array of per-range-table-entry
+										 * ExecRowMarks, or NULL if none */
 	PlannedStmt *es_plannedstmt;	/* link to top of plan tree */
 	const char *es_sourceText;	/* Source text from QueryDesc */
 
@@ -525,8 +540,6 @@ typedef struct EState
 
 	List	   *es_tupleTable;	/* List of TupleTableSlots */
 
-	List	   *es_rowMarks;	/* List of ExecRowMarks */
-
 	uint64		es_processed;	/* # of tuples processed */
 	Oid			es_lastoid;		/* last oid processed (by INSERT) */
 
@@ -554,7 +567,7 @@ typedef struct EState
 	 * return, or NULL if nothing to return; es_epqTupleSet[] is true if a
 	 * particular array entry is valid; and es_epqScanDone[] is state to
 	 * remember if the tuple has been returned already.  Arrays are of size
-	 * list_length(es_range_table) and are indexed by scan node scanrelid - 1.
+	 * es_range_table_size and are indexed by scan node scanrelid - 1.
 	 */
 	HeapTuple  *es_epqTuple;	/* array of EPQ substitute tuples */
 	bool	   *es_epqTupleSet; /* true if EPQ tuple is provided */
@@ -595,7 +608,9 @@ typedef struct EState
  * node that sources the relation (e.g., for a foreign table the FDW can use
  * ermExtra to hold information).
  *
- * EState->es_rowMarks is a list of these structs.
+ * EState->es_rowmarks is an array of these structs, indexed by RT index,
+ * with NULLs for irrelevant RT indexes.  es_rowmarks itself is NULL if
+ * there are no rowmarks.
  */
 typedef struct ExecRowMark
 {
@@ -617,7 +632,7 @@ typedef struct ExecRowMark
  *	   additional runtime representation of FOR [KEY] UPDATE/SHARE clauses
  *
  * Each LockRows and ModifyTable node keeps a list of the rowmarks it needs to
- * deal with.  In addition to a pointer to the related entry in es_rowMarks,
+ * deal with.  In addition to a pointer to the related entry in es_rowmarks,
  * this struct carries the column number(s) of the resjunk columns associated
  * with the rowmark (see comments for PlanRowMark for more detail).  In the
  * case of ModifyTable, there has to be a separate ExecAuxRowMark list for
@@ -626,7 +641,7 @@ typedef struct ExecRowMark
  */
 typedef struct ExecAuxRowMark
 {
-	ExecRowMark *rowmark;		/* related entry in es_rowMarks */
+	ExecRowMark *rowmark;		/* related entry in es_rowmarks */
 	AttrNumber	ctidAttNo;		/* resno of ctid junk attribute, if any */
 	AttrNumber	toidAttNo;		/* resno of tableoid junk attribute, if any */
 	AttrNumber	wholeAttNo;		/* resno of whole-row junk attribute, if any */

@@ -41,7 +41,7 @@ CREATE VIEW pg_shadow AS
         rolreplication AS userepl,
         rolbypassrls AS usebypassrls,
         rolpassword AS passwd,
-        rolvaliduntil::abstime AS valuntil,
+        rolvaliduntil AS valuntil,
         setconfig AS useconfig
     FROM pg_authid LEFT JOIN pg_db_role_setting s
     ON (pg_authid.oid = setrole AND setdatabase = 0)
@@ -1150,6 +1150,9 @@ REVOKE EXECUTE ON FUNCTION lo_export(oid, text) FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_ls_logdir() FROM public;
 REVOKE EXECUTE ON FUNCTION pg_ls_waldir() FROM public;
+REVOKE EXECUTE ON FUNCTION pg_ls_archive_statusdir() FROM public;
+REVOKE EXECUTE ON FUNCTION pg_ls_tmpdir() FROM public;
+REVOKE EXECUTE ON FUNCTION pg_ls_tmpdir(oid) FROM public;
 
 REVOKE EXECUTE ON FUNCTION pg_read_file(text) FROM public;
 REVOKE EXECUTE ON FUNCTION pg_read_file(text,bigint,bigint) FROM public;
@@ -1170,6 +1173,9 @@ REVOKE EXECUTE ON FUNCTION pg_ls_dir(text,boolean,boolean) FROM public;
 --
 GRANT EXECUTE ON FUNCTION pg_ls_logdir() TO pg_monitor;
 GRANT EXECUTE ON FUNCTION pg_ls_waldir() TO pg_monitor;
+GRANT EXECUTE ON FUNCTION pg_ls_archive_statusdir() TO pg_monitor;
+GRANT EXECUTE ON FUNCTION pg_ls_tmpdir() TO pg_monitor;
+GRANT EXECUTE ON FUNCTION pg_ls_tmpdir(oid) TO pg_monitor;
 
 GRANT pg_read_all_settings TO pg_monitor;
 GRANT pg_read_all_stats TO pg_monitor;

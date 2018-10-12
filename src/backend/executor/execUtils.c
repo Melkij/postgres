@@ -25,7 +25,10 @@
  *		etc
  *
  *		ExecOpenScanRelation	Common code for scan node init routines.
- *		ExecCloseScanRelation
+ *
+ *		ExecInitRangeTable		Set up executor's range-table-related data.
+ *
+ *		ExecGetRangeTableRelation		Fetch Relation for a rangetable entry.
  *
  *		executor_errposition	Report syntactic position of an error.
  *
@@ -107,6 +110,10 @@ CreateExecutorState(void)
 	estate->es_snapshot = InvalidSnapshot;	/* caller must initialize this */
 	estate->es_crosscheck_snapshot = InvalidSnapshot;	/* no crosscheck */
 	estate->es_range_table = NIL;
+	estate->es_range_table_array = NULL;
+	estate->es_range_table_size = 0;
+	estate->es_relations = NULL;
+	estate->es_rowmarks = NULL;
 	estate->es_plannedstmt = NULL;
 
 	estate->es_junkFilter = NULL;
@@ -135,8 +142,6 @@ CreateExecutorState(void)
 	estate->es_query_cxt = qcontext;
 
 	estate->es_tupleTable = NIL;
-
-	estate->es_rowMarks = NIL;
 
 	estate->es_processed = 0;
 	estate->es_lastoid = InvalidOid;
@@ -648,15 +653,9 @@ Relation
 ExecOpenScanRelation(EState *estate, Index scanrelid, int eflags)
 {
 	Relation	rel;
-	Oid			reloid;
 
-	/* Open the relation and verify lock was obtained upstream */
-	reloid = getrelid(scanrelid, estate->es_range_table);
-	rel = heap_open(reloid, NoLock);
-	Assert(IsParallelWorker() ||
-		   CheckRelationLockedByMe(rel,
-								   rt_fetch(scanrelid, estate->es_range_table)->rellockmode,
-								   true));
+	/* Open the relation. */
+	rel = ExecGetRangeTableRelation(estate, scanrelid);
 
 	/*
 	 * Complain if we're attempting a scan of an unscannable relation, except
@@ -674,24 +673,97 @@ ExecOpenScanRelation(EState *estate, Index scanrelid, int eflags)
 	return rel;
 }
 
-/* ----------------------------------------------------------------
- *		ExecCloseScanRelation
+/*
+ * ExecInitRangeTable
+ *		Set up executor's range-table-related data
  *
- *		Close the heap relation scanned by a base-level scan plan node.
- *		This should be called during the node's ExecEnd routine.
- *
- * Currently, we do not release the lock acquired by ExecOpenScanRelation.
- * This lock should be held till end of transaction.  (There is a faction
- * that considers this too much locking, however.)
- *
- * If we did want to release the lock, we'd have to repeat the logic in
- * ExecOpenScanRelation in order to figure out what to release.
- * ----------------------------------------------------------------
+ * We build an array from the range table list to allow faster lookup by RTI.
+ * (The es_range_table field is now somewhat redundant, but we keep it to
+ * avoid breaking external code unnecessarily.)
+ * This is also a convenient place to set up the parallel es_relations array.
  */
 void
-ExecCloseScanRelation(Relation scanrel)
+ExecInitRangeTable(EState *estate, List *rangeTable)
 {
-	heap_close(scanrel, NoLock);
+	Index		rti;
+	ListCell   *lc;
+
+	/* Remember the range table List as-is */
+	estate->es_range_table = rangeTable;
+
+	/* Set up the equivalent array representation */
+	estate->es_range_table_size = list_length(rangeTable);
+	estate->es_range_table_array = (RangeTblEntry **)
+		palloc(estate->es_range_table_size * sizeof(RangeTblEntry *));
+	rti = 0;
+	foreach(lc, rangeTable)
+	{
+		estate->es_range_table_array[rti++] = lfirst_node(RangeTblEntry, lc);
+	}
+
+	/*
+	 * Allocate an array to store an open Relation corresponding to each
+	 * rangetable entry, and initialize entries to NULL.  Relations are opened
+	 * and stored here as needed.
+	 */
+	estate->es_relations = (Relation *)
+		palloc0(estate->es_range_table_size * sizeof(Relation));
+
+	/*
+	 * es_rowmarks is also parallel to the es_range_table_array, but it's
+	 * allocated only if needed.
+	 */
+	estate->es_rowmarks = NULL;
+}
+
+/*
+ * ExecGetRangeTableRelation
+ *		Open the Relation for a range table entry, if not already done
+ *
+ * The Relations will be closed again in ExecEndPlan().
+ */
+Relation
+ExecGetRangeTableRelation(EState *estate, Index rti)
+{
+	Relation	rel;
+
+	Assert(rti > 0 && rti <= estate->es_range_table_size);
+
+	rel = estate->es_relations[rti - 1];
+	if (rel == NULL)
+	{
+		/* First time through, so open the relation */
+		RangeTblEntry *rte = exec_rt_fetch(rti, estate);
+
+		Assert(rte->rtekind == RTE_RELATION);
+
+		if (!IsParallelWorker())
+		{
+			/*
+			 * In a normal query, we should already have the appropriate lock,
+			 * but verify that through an Assert.  Since there's already an
+			 * Assert inside heap_open that insists on holding some lock, it
+			 * seems sufficient to check this only when rellockmode is higher
+			 * than the minimum.
+			 */
+			rel = heap_open(rte->relid, NoLock);
+			Assert(rte->rellockmode == AccessShareLock ||
+				   CheckRelationLockedByMe(rel, rte->rellockmode, false));
+		}
+		else
+		{
+			/*
+			 * If we are a parallel worker, we need to obtain our own local
+			 * lock on the relation.  This ensures sane behavior in case the
+			 * parent process exits before we do.
+			 */
+			rel = heap_open(rte->relid, rte->rellockmode);
+		}
+
+		estate->es_relations[rti - 1] = rel;
+	}
+
+	return rel;
 }
 
 /*
@@ -844,66 +916,6 @@ ShutdownExprContext(ExprContext *econtext, bool isCommit)
 	}
 
 	MemoryContextSwitchTo(oldcontext);
-}
-
-/*
- * ExecLockNonLeafAppendTables
- *
- * Locks, if necessary, the tables indicated by the RT indexes contained in
- * the partitioned_rels list.  These are the non-leaf tables in the partition
- * tree controlled by a given Append or MergeAppend node.
- */
-void
-ExecLockNonLeafAppendTables(List *partitioned_rels, EState *estate)
-{
-	PlannedStmt *stmt = estate->es_plannedstmt;
-	ListCell   *lc;
-
-	foreach(lc, partitioned_rels)
-	{
-		ListCell   *l;
-		Index		rti = lfirst_int(lc);
-		bool		is_result_rel = false;
-		Oid			relid = getrelid(rti, estate->es_range_table);
-
-		/* If this is a result relation, already locked in InitPlan */
-		foreach(l, stmt->nonleafResultRelations)
-		{
-			if (rti == lfirst_int(l))
-			{
-				is_result_rel = true;
-				break;
-			}
-		}
-
-		/*
-		 * Not a result relation; check if there is a RowMark that requires
-		 * taking a RowShareLock on this rel.
-		 */
-		if (!is_result_rel)
-		{
-			PlanRowMark *rc = NULL;
-			LOCKMODE	lockmode;
-
-			foreach(l, stmt->rowMarks)
-			{
-				if (((PlanRowMark *) lfirst(l))->rti == rti)
-				{
-					rc = lfirst(l);
-					break;
-				}
-			}
-
-			if (rc && RowMarkRequiresRowShareLock(rc->markType))
-				lockmode = RowShareLock;
-			else
-				lockmode = AccessShareLock;
-
-			Assert(lockmode == rt_fetch(rti, estate->es_range_table)->rellockmode);
-
-			LockRelationOid(relid, lockmode);
-		}
-	}
 }
 
 /*
