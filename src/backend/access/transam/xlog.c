@@ -273,7 +273,7 @@ char	   *recoveryEndCommand = NULL;
 char	   *archiveCleanupCommand = NULL;
 RecoveryTargetType recoveryTarget = RECOVERY_TARGET_UNSET;
 bool		recoveryTargetInclusive = true;
-int 		recoveryTargetAction = RECOVERY_TARGET_ACTION_PAUSE;
+int			recoveryTargetAction = RECOVERY_TARGET_ACTION_PAUSE;
 TransactionId recoveryTargetXid;
 TimestampTz recoveryTargetTime;
 char	   *recoveryTargetName;

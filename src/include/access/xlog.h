@@ -147,7 +147,7 @@ extern char *recoveryTargetTypeString;
 extern RecoveryTargetType recoveryTarget;
 extern char *recoveryTargetValue;
 extern bool recoveryTargetInclusive;
-extern int recoveryTargetAction;
+extern int	recoveryTargetAction;
 extern TransactionId recoveryTargetXid;
 extern TimestampTz recoveryTargetTime;
 extern char *recoveryTargetName;

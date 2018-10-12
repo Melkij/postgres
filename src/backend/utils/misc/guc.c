@@ -542,7 +542,7 @@ static int	wal_block_size;
 static bool data_checksums;
 static bool integer_datetimes;
 static bool assert_enabled;
-static char	*recovery_target_timeline_string;
+static char *recovery_target_timeline_string;
 static char *recovery_target_string;
 static char *recovery_target_xid_string;
 static char *recovery_target_time_string;
@@ -10996,6 +10996,7 @@ check_recovery_target_timeline(char **newval, void **extra, GucSource source)
 	else
 	{
 		const char *hintmsg;
+
 		if (!parse_int(*newval, NULL, 0, &hintmsg))
 		{
 			GUC_check_errdetail("recovery_target_timeline is not a valid number");
@@ -11053,9 +11054,10 @@ assign_recovery_target(const char *newval, void *extra)
 	if (newval && strcmp(newval, "") != 0)
 		recoveryTarget = RECOVERY_TARGET_IMMEDIATE;
 	else
+
 		/*
-		 * reset recoveryTarget to RECOVERY_TARGET_UNSET to proper handle
-		 * if user set multiple recovery_target with blank value on last
+		 * reset recoveryTarget to RECOVERY_TARGET_UNSET to proper handle if
+		 * user set multiple recovery_target with blank value on last
 		 */
 		recoveryTarget = RECOVERY_TARGET_UNSET;
 }
@@ -11067,6 +11069,7 @@ check_recovery_target_xid(char **newval, void **extra, GucSource source)
 	{
 		TransactionId xid;
 		TransactionId *myextra;
+
 		errno = 0;
 		xid = (TransactionId) strtoul(*newval, NULL, 0);
 		if (errno == EINVAL || errno == ERANGE)
@@ -11178,7 +11181,8 @@ assign_recovery_target_name(const char *newval, void *extra)
 	{
 		recoveryTarget = RECOVERY_TARGET_NAME;
 		recoveryTargetName = (char *) newval;
-	} else
+	}
+	else
 		recoveryTarget = RECOVERY_TARGET_UNSET;
 }
 
@@ -11192,8 +11196,7 @@ check_recovery_target_lsn(char **newval, void **extra, GucSource source)
 		MemoryContext oldcontext = CurrentMemoryContext;
 
 		/*
-		 * Convert the LSN string given by the user to XLogRecPtr
-		 * form.
+		 * Convert the LSN string given by the user to XLogRecPtr form.
 		 */
 		PG_TRY();
 		{
