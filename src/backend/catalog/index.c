@@ -352,7 +352,7 @@ ConstructTupleDescriptor(Relation heapRelation,
 		if (atnum != 0)
 		{
 			/* Simple index column */
-			Form_pg_attribute from;
+			const FormData_pg_attribute *from;
 
 			if (atnum < 0)
 			{
@@ -994,9 +994,12 @@ index_create(Relation heapRelation,
 	 */
 	CacheInvalidateRelcache(heapRelation);
 
-	/* update pg_inherits, if needed */
+	/* update pg_inherits and the parent's relhassubclass, if needed */
 	if (OidIsValid(parentIndexRelid))
+	{
 		StoreSingleInheritance(indexRelationId, parentIndexRelid, 1);
+		SetRelationHasSubclass(parentIndexRelid, true);
+	}
 
 	/*
 	 * Register constraint and dependencies for the index.

@@ -78,15 +78,6 @@
 
 extern uint32 bootstrap_data_checksum_version;
 
-/* File path names (all relative to $PGDATA) */
-#define RECOVERY_COMMAND_FILE	"recovery.conf"
-#define RECOVERY_COMMAND_DONE	"recovery.done"
-#define PROMOTE_SIGNAL_FILE		"promote.signal"
-#define FALLBACK_PROMOTE_SIGNAL_FILE "fallback_promote.signal"
-#define RECOVERY_SIGNAL_FILE	"recovery.signal"
-#define STANDBY_SIGNAL_FILE		"standby.signal"
-
-
 /* User-settable parameters */
 int			max_wal_size_mb = 1024; /* 1 GB */
 int			min_wal_size_mb = 80;	/* 80 MB */
