@@ -164,7 +164,6 @@ extern char *PrimarySlotName;
 
 extern char *PromoteTriggerFile;
 
-extern char *recoveryTargetTLIString;
 extern RecoveryTargetTimeLineGoal recoveryTargetTimeLineGoal;
 extern TimeLineID recoveryTargetTLIRequested;
 extern TimeLineID recoveryTargetTLI;

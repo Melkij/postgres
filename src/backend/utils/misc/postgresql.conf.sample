@@ -240,12 +240,14 @@
 
 # Set these only when performing a targeted recovery
 
-#recovery_target='' #
-#recovery_target_name='' #
-#recovery_target_time='' #
-#recovery_target_xid='' #
-#recovery_target_lsn='' #
-#recovery_target_inclusive = on
+#recovery_target='' # 'immediate' to end recovery as soon as a consistent state is reached
+#recovery_target_name='' # the named restore point to which recovery will proceed
+#recovery_target_time='' # the time stamp up to which recovery will proceed
+#recovery_target_xid=''  # the transaction ID up to which recovery will proceed
+#recovery_target_lsn=''  # the LSN of the write-ahead log location up to which recovery will proceed
+#recovery_target_inclusive = on # Specifies whether to stop:
+								# just after the specified recovery target (true)
+								# just before the recovery target (false)
 #recovery_target_timeline = ''	# unset means read from controlfile (default),
 				# or set to 'latest' or timeline ID
 #recovery_target_action = '' 	# 'pause', 'promote', 'shutdown'
