@@ -30,6 +30,7 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
+#include "optimizer/clauses.h"
 #include "optimizer/planner.h"
 #include "parser/parse_coerce.h"
 #include "parser/scansup.h"
@@ -2071,47 +2072,166 @@ static int
 exec_stmt_call(PLpgSQL_execstate *estate, PLpgSQL_stmt_call *stmt)
 {
 	PLpgSQL_expr *expr = stmt->expr;
-	SPIPlanPtr	plan;
-	ParamListInfo paramLI;
-	LocalTransactionId before_lxid;
+	volatile LocalTransactionId before_lxid;
 	LocalTransactionId after_lxid;
-	bool		pushed_active_snap = false;
-	int			rc;
+	volatile bool pushed_active_snap = false;
+	volatile int rc;
 
-	if (expr->plan == NULL)
-	{
-		/*
-		 * Don't save the plan if not in atomic context.  Otherwise,
-		 * transaction ends would cause errors about plancache leaks.  XXX
-		 * This would be fixable with some plancache/resowner surgery
-		 * elsewhere, but for now we'll just work around this here.
-		 */
-		exec_prepare_plan(estate, expr, 0, estate->atomic);
-
-		/*
-		 * The procedure call could end transactions, which would upset the
-		 * snapshot management in SPI_execute*, so don't let it do it.
-		 * Instead, we set the snapshots ourselves below.
-		 */
-		expr->plan->no_snapshots = true;
-	}
-
-	paramLI = setup_param_list(estate, expr);
-
-	before_lxid = MyProc->lxid;
-
-	/*
-	 * Set snapshot only for non-read-only procedures, similar to SPI
-	 * behavior.
-	 */
-	if (!estate->readonly_func)
-	{
-		PushActiveSnapshot(GetTransactionSnapshot());
-		pushed_active_snap = true;
-	}
-
+	/* PG_TRY to ensure we clear the plan link, if needed, on failure */
 	PG_TRY();
 	{
+		SPIPlanPtr	plan = expr->plan;
+		ParamListInfo paramLI;
+
+		if (plan == NULL)
+		{
+
+			/*
+			 * Don't save the plan if not in atomic context.  Otherwise,
+			 * transaction ends would cause errors about plancache leaks.
+			 *
+			 * XXX This would be fixable with some plancache/resowner surgery
+			 * elsewhere, but for now we'll just work around this here.
+			 */
+			exec_prepare_plan(estate, expr, 0, estate->atomic);
+
+			/*
+			 * The procedure call could end transactions, which would upset
+			 * the snapshot management in SPI_execute*, so don't let it do it.
+			 * Instead, we set the snapshots ourselves below.
+			 */
+			plan = expr->plan;
+			plan->no_snapshots = true;
+
+			/*
+			 * Force target to be recalculated whenever the plan changes, in
+			 * case the procedure's argument list has changed.
+			 */
+			stmt->target = NULL;
+		}
+
+		/*
+		 * We construct a DTYPE_ROW datum representing the plpgsql variables
+		 * associated with the procedure's output arguments.  Then we can use
+		 * exec_move_row() to do the assignments.
+		 */
+		if (stmt->is_call && stmt->target == NULL)
+		{
+			Node	   *node;
+			FuncExpr   *funcexpr;
+			HeapTuple	func_tuple;
+			List	   *funcargs;
+			Oid		   *argtypes;
+			char	  **argnames;
+			char	   *argmodes;
+			MemoryContext oldcontext;
+			PLpgSQL_row *row;
+			int			nfields;
+			int			i;
+			ListCell   *lc;
+
+			/*
+			 * Get the parsed CallStmt, and look up the called procedure
+			 */
+			node = linitial_node(Query,
+								 ((CachedPlanSource *) linitial(plan->plancache_list))->query_list)->utilityStmt;
+			if (node == NULL || !IsA(node, CallStmt))
+				elog(ERROR, "query for CALL statement is not a CallStmt");
+
+			funcexpr = ((CallStmt *) node)->funcexpr;
+
+			func_tuple = SearchSysCache1(PROCOID,
+										 ObjectIdGetDatum(funcexpr->funcid));
+			if (!HeapTupleIsValid(func_tuple))
+				elog(ERROR, "cache lookup failed for function %u",
+					 funcexpr->funcid);
+
+			/*
+			 * Extract function arguments, and expand any named-arg notation
+			 */
+			funcargs = expand_function_arguments(funcexpr->args,
+												 funcexpr->funcresulttype,
+												 func_tuple);
+
+			/*
+			 * Get the argument names and modes, too
+			 */
+			get_func_arg_info(func_tuple, &argtypes, &argnames, &argmodes);
+
+			ReleaseSysCache(func_tuple);
+
+			/*
+			 * Begin constructing row Datum
+			 */
+			oldcontext = MemoryContextSwitchTo(estate->func->fn_cxt);
+
+			row = (PLpgSQL_row *) palloc0(sizeof(PLpgSQL_row));
+			row->dtype = PLPGSQL_DTYPE_ROW;
+			row->refname = "(unnamed row)";
+			row->lineno = -1;
+			row->varnos = (int *) palloc(sizeof(int) * list_length(funcargs));
+
+			MemoryContextSwitchTo(oldcontext);
+
+			/*
+			 * Examine procedure's argument list.  Each output arg position
+			 * should be an unadorned plpgsql variable (Datum), which we can
+			 * insert into the row Datum.
+			 */
+			nfields = 0;
+			i = 0;
+			foreach(lc, funcargs)
+			{
+				Node	   *n = lfirst(lc);
+
+				if (argmodes &&
+					(argmodes[i] == PROARGMODE_INOUT ||
+					 argmodes[i] == PROARGMODE_OUT))
+				{
+					if (IsA(n, Param))
+					{
+						Param	   *param = (Param *) n;
+
+						/* paramid is offset by 1 (see make_datum_param()) */
+						row->varnos[nfields++] = param->paramid - 1;
+					}
+					else
+					{
+						/* report error using parameter name, if available */
+						if (argnames && argnames[i] && argnames[i][0])
+							ereport(ERROR,
+									(errcode(ERRCODE_SYNTAX_ERROR),
+									 errmsg("procedure parameter \"%s\" is an output parameter but corresponding argument is not writable",
+											argnames[i])));
+						else
+							ereport(ERROR,
+									(errcode(ERRCODE_SYNTAX_ERROR),
+									 errmsg("procedure parameter %d is an output parameter but corresponding argument is not writable",
+											i + 1)));
+					}
+				}
+				i++;
+			}
+
+			row->nfields = nfields;
+
+			stmt->target = (PLpgSQL_variable *) row;
+		}
+
+		paramLI = setup_param_list(estate, expr);
+
+		before_lxid = MyProc->lxid;
+
+		/*
+		 * Set snapshot only for non-read-only procedures, similar to SPI
+		 * behavior.
+		 */
+		if (!estate->readonly_func)
+		{
+			PushActiveSnapshot(GetTransactionSnapshot());
+			pushed_active_snap = true;
+		}
+
 		rc = SPI_execute_plan_with_paramlist(expr->plan, paramLI,
 											 estate->readonly_func, 0);
 	}
@@ -2127,16 +2247,14 @@ exec_stmt_call(PLpgSQL_execstate *estate, PLpgSQL_stmt_call *stmt)
 	}
 	PG_END_TRY();
 
-	plan = expr->plan;
-
 	if (expr->plan && !expr->plan->saved)
 		expr->plan = NULL;
-
-	after_lxid = MyProc->lxid;
 
 	if (rc < 0)
 		elog(ERROR, "SPI_execute_plan_with_paramlist failed executing query \"%s\": %s",
 			 expr->query, SPI_result_code_string(rc));
+
+	after_lxid = MyProc->lxid;
 
 	if (before_lxid == after_lxid)
 	{
@@ -2158,105 +2276,16 @@ exec_stmt_call(PLpgSQL_execstate *estate, PLpgSQL_stmt_call *stmt)
 		plpgsql_create_econtext(estate);
 	}
 
+	/*
+	 * Check result rowcount; if there's one row, assign procedure's output
+	 * values back to the appropriate variables.
+	 */
 	if (SPI_processed == 1)
 	{
 		SPITupleTable *tuptab = SPI_tuptable;
 
-		/*
-		 * Construct a dummy target row based on the output arguments of the
-		 * procedure call.
-		 */
 		if (!stmt->target)
-		{
-			Node	   *node;
-			ListCell   *lc;
-			FuncExpr   *funcexpr;
-			int			i;
-			HeapTuple	tuple;
-			Oid		   *argtypes;
-			char	  **argnames;
-			char	   *argmodes;
-			MemoryContext oldcontext;
-			PLpgSQL_row *row;
-			int			nfields;
-
-			/*
-			 * Get the original CallStmt
-			 */
-			node = linitial_node(Query, ((CachedPlanSource *) linitial(plan->plancache_list))->query_list)->utilityStmt;
-			if (!IsA(node, CallStmt))
-				elog(ERROR, "returned row from not a CallStmt");
-
-			funcexpr = castNode(CallStmt, node)->funcexpr;
-
-			/*
-			 * Get the argument modes
-			 */
-			tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcexpr->funcid));
-			if (!HeapTupleIsValid(tuple))
-				elog(ERROR, "cache lookup failed for function %u", funcexpr->funcid);
-			get_func_arg_info(tuple, &argtypes, &argnames, &argmodes);
-			ReleaseSysCache(tuple);
-
-			/*
-			 * Construct row
-			 */
-			oldcontext = MemoryContextSwitchTo(estate->func->fn_cxt);
-
-			row = palloc0(sizeof(*row));
-			row->dtype = PLPGSQL_DTYPE_ROW;
-			row->refname = "(unnamed row)";
-			row->lineno = -1;
-			row->varnos = palloc(sizeof(int) * FUNC_MAX_ARGS);
-
-			nfields = 0;
-			i = 0;
-			foreach(lc, funcexpr->args)
-			{
-				Node	   *n = lfirst(lc);
-
-				if (argmodes && argmodes[i] == PROARGMODE_INOUT)
-				{
-					if (IsA(n, Param))
-					{
-						Param	   *param = castNode(Param, n);
-
-						/* paramid is offset by 1 (see make_datum_param()) */
-						row->varnos[nfields++] = param->paramid - 1;
-					}
-					else if (IsA(n, NamedArgExpr))
-					{
-						NamedArgExpr *nexpr = castNode(NamedArgExpr, n);
-						Param	   *param;
-
-						if (!IsA(nexpr->arg, Param))
-							ereport(ERROR,
-									(errcode(ERRCODE_SYNTAX_ERROR),
-									 errmsg("argument %d is an output argument but is not writable", i + 1)));
-
-						param = castNode(Param, nexpr->arg);
-
-						/*
-						 * Named arguments must be after positional arguments,
-						 * so we can increase nfields.
-						 */
-						row->varnos[nexpr->argnumber] = param->paramid - 1;
-						nfields++;
-					}
-					else
-						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
-								 errmsg("argument %d is an output argument but is not writable", i + 1)));
-				}
-				i++;
-			}
-
-			row->nfields = nfields;
-
-			MemoryContextSwitchTo(oldcontext);
-
-			stmt->target = (PLpgSQL_variable *) row;
-		}
+			elog(ERROR, "DO statement returned a row");
 
 		exec_move_row(estate, stmt->target, tuptab->vals[0], tuptab->tupdesc);
 	}
