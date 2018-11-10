@@ -1080,7 +1080,7 @@ prepare_projection_slot(AggState *aggstate, TupleTableSlot *slot, int currentSet
 
 		aggstate->grouped_cols = grouped_cols;
 
-		if (slot->tts_isempty)
+		if (TTS_EMPTY(slot))
 		{
 			/*
 			 * Force all values to be NULL if working on an empty input tuple
@@ -2219,7 +2219,7 @@ ExecInitAgg(Agg *node, EState *estate, int eflags)
 	/*
 	 * Initialize result type, slot and projection.
 	 */
-	ExecInitResultTupleSlotTL(estate, &aggstate->ss.ps);
+	ExecInitResultTupleSlotTL(&aggstate->ss.ps);
 	ExecAssignProjectionInfo(&aggstate->ss.ps, NULL);
 
 	/*

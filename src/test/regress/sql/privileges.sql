@@ -495,7 +495,7 @@ GRANT ALL PRIVILEGES ON LANGUAGE sql TO PUBLIC;
 BEGIN;
 SELECT '{1}'::int4[]::int8[];
 REVOKE ALL ON FUNCTION int8(integer) FROM PUBLIC;
-SELECT '{1}'::int4[]::int8[]; --superuser, suceed
+SELECT '{1}'::int4[]::int8[]; --superuser, succeed
 SET SESSION AUTHORIZATION regress_priv_user4;
 SELECT '{1}'::int4[]::int8[]; --other user, fail
 ROLLBACK;
@@ -732,6 +732,7 @@ select has_column_privilege('mytable','........pg.dropped.2........','select');
 select has_column_privilege('mytable',2::int2,'select');
 revoke select on table mytable from regress_priv_user3;
 select has_column_privilege('mytable',2::int2,'select');
+drop table mytable;
 
 -- Grant options
 
@@ -934,6 +935,13 @@ ALTER DEFAULT PRIVILEGES FOR ROLE regress_priv_user1 REVOKE EXECUTE ON FUNCTIONS
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA testns GRANT USAGE ON SCHEMAS TO regress_priv_user2; -- error
 
+--
+-- Testing blanket default grants is very hazardous since it might change
+-- the privileges attached to objects created by concurrent regression tests.
+-- To avoid that, be sure to revoke the privileges again before committing.
+--
+BEGIN;
+
 ALTER DEFAULT PRIVILEGES GRANT USAGE ON SCHEMAS TO regress_priv_user2;
 
 CREATE SCHEMA testns2;
@@ -956,6 +964,8 @@ SELECT has_schema_privilege('regress_priv_user2', 'testns4', 'USAGE'); -- yes
 SELECT has_schema_privilege('regress_priv_user2', 'testns4', 'CREATE'); -- yes
 
 ALTER DEFAULT PRIVILEGES REVOKE ALL ON SCHEMAS FROM regress_priv_user2;
+
+COMMIT;
 
 CREATE SCHEMA testns5;
 

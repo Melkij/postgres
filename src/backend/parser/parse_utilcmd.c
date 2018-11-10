@@ -988,7 +988,6 @@ transformTableLikeClause(CreateStmtContext *cxt, TableLikeClause *table_like_cla
 		def->is_local = true;
 		def->is_not_null = attribute->attnotnull;
 		def->is_from_type = false;
-		def->is_from_parent = false;
 		def->storage = 0;
 		def->raw_default = NULL;
 		def->cooked_default = NULL;
@@ -1265,7 +1264,6 @@ transformOfType(CreateStmtContext *cxt, TypeName *ofTypename)
 		n->is_local = true;
 		n->is_not_null = false;
 		n->is_from_type = true;
-		n->is_from_parent = false;
 		n->storage = 0;
 		n->raw_default = NULL;
 		n->cooked_default = NULL;
@@ -2065,7 +2063,7 @@ transformIndexConstraint(Constraint *constraint, CreateStmtContext *cxt)
 		for (i = 0; i < index_form->indnatts; i++)
 		{
 			int16		attnum = index_form->indkey.values[i];
-			Form_pg_attribute attform;
+			const FormData_pg_attribute *attform;
 			char	   *attname;
 			Oid			defopclass;
 
@@ -2919,6 +2917,7 @@ transformAlterTableStmt(Oid relid, AlterTableStmt *stmt,
 						const char *queryString)
 {
 	Relation	rel;
+	TupleDesc	tupdesc;
 	ParseState *pstate;
 	CreateStmtContext cxt;
 	List	   *result;
@@ -2938,6 +2937,7 @@ transformAlterTableStmt(Oid relid, AlterTableStmt *stmt,
 
 	/* Caller is responsible for locking the relation */
 	rel = relation_open(relid, NoLock);
+	tupdesc = RelationGetDescr(rel);
 
 	/* Set up pstate */
 	pstate = make_parsestate(NULL);
@@ -3067,7 +3067,8 @@ transformAlterTableStmt(Oid relid, AlterTableStmt *stmt,
 					 * if attribute not found, something will error about it
 					 * later
 					 */
-					if (attnum != InvalidAttrNumber && get_attidentity(relid, attnum))
+					if (attnum != InvalidAttrNumber &&
+						TupleDescAttr(tupdesc, attnum - 1)->attidentity)
 					{
 						Oid			seq_relid = getOwnedSequence(relid, attnum);
 						Oid			typeOid = typenameTypeId(pstate, def->typeName);

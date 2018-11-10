@@ -5824,6 +5824,10 @@
   proname => 'pg_backup_start_time', provolatile => 's',
   prorettype => 'timestamptz', proargtypes => '',
   prosrc => 'pg_backup_start_time' },
+{ oid => '3436', descr => 'promote standby server',
+  proname => 'pg_promote', provolatile => 'v',
+  prorettype => 'bool', proargtypes => 'bool int4', proargnames => '{wait,wait_seconds}',
+  prosrc => 'pg_promote' },
 { oid => '2848', descr => 'switch to new wal file',
   proname => 'pg_switch_wal', provolatile => 'v', prorettype => 'pg_lsn',
   proargtypes => '', prosrc => 'pg_switch_wal' },
@@ -10024,5 +10028,14 @@
   proname => 'satisfies_hash_partition', provariadic => 'any',
   proisstrict => 'f', prorettype => 'bool', proargtypes => 'oid int4 int4 any',
   proargmodes => '{i,i,i,v}', prosrc => 'satisfies_hash_partition' },
+
+# information about a partition tree
+{ oid => '3423', descr => 'view partition tree tables',
+  proname => 'pg_partition_tree', prorows => '1000', proretset => 't',
+  provolatile => 'v', prorettype => 'record', proargtypes => 'regclass',
+  proallargtypes => '{regclass,regclass,regclass,bool,int4}',
+  proargmodes => '{i,o,o,o,o}',
+  proargnames => '{rootrelid,relid,parentrelid,isleaf,level}',
+  prosrc => 'pg_partition_tree' }
 
 ]

@@ -487,7 +487,7 @@ AssignTransactionId(TransactionState s)
 
 	/*
 	 * Ensure parent(s) have XIDs, so that a child always has an XID later
-	 * than its parent.  Musn't recurse here, or we might get a stack overflow
+	 * than its parent.  Mustn't recurse here, or we might get a stack overflow
 	 * if we're at the bottom of a huge stack of subtransactions none of which
 	 * have XIDs yet.
 	 */
@@ -1000,11 +1000,11 @@ AtStart_Memory(void)
 	 */
 	if (TransactionAbortContext == NULL)
 		TransactionAbortContext =
-			AllocSetContextCreateExtended(TopMemoryContext,
-										  "TransactionAbortContext",
-										  32 * 1024,
-										  32 * 1024,
-										  32 * 1024);
+			AllocSetContextCreate(TopMemoryContext,
+								  "TransactionAbortContext",
+								  32 * 1024,
+								  32 * 1024,
+								  32 * 1024);
 
 	/*
 	 * We shouldn't have a transaction context already.

@@ -144,7 +144,7 @@ static List *insert_ordered_unique_oid(List *list, Oid datum);
  * fixed-size portion of the structure anyway.
  */
 
-static FormData_pg_attribute a1 = {
+static const FormData_pg_attribute a1 = {
 	.attname = {"ctid"},
 	.atttypid = TIDOID,
 	.attlen = sizeof(ItemPointerData),
@@ -158,7 +158,7 @@ static FormData_pg_attribute a1 = {
 	.attislocal = true,
 };
 
-static FormData_pg_attribute a2 = {
+static const FormData_pg_attribute a2 = {
 	.attname = {"oid"},
 	.atttypid = OIDOID,
 	.attlen = sizeof(Oid),
@@ -172,7 +172,7 @@ static FormData_pg_attribute a2 = {
 	.attislocal = true,
 };
 
-static FormData_pg_attribute a3 = {
+static const FormData_pg_attribute a3 = {
 	.attname = {"xmin"},
 	.atttypid = XIDOID,
 	.attlen = sizeof(TransactionId),
@@ -186,7 +186,7 @@ static FormData_pg_attribute a3 = {
 	.attislocal = true,
 };
 
-static FormData_pg_attribute a4 = {
+static const FormData_pg_attribute a4 = {
 	.attname = {"cmin"},
 	.atttypid = CIDOID,
 	.attlen = sizeof(CommandId),
@@ -200,7 +200,7 @@ static FormData_pg_attribute a4 = {
 	.attislocal = true,
 };
 
-static FormData_pg_attribute a5 = {
+static const FormData_pg_attribute a5 = {
 	.attname = {"xmax"},
 	.atttypid = XIDOID,
 	.attlen = sizeof(TransactionId),
@@ -214,7 +214,7 @@ static FormData_pg_attribute a5 = {
 	.attislocal = true,
 };
 
-static FormData_pg_attribute a6 = {
+static const FormData_pg_attribute a6 = {
 	.attname = {"cmax"},
 	.atttypid = CIDOID,
 	.attlen = sizeof(CommandId),
@@ -234,7 +234,7 @@ static FormData_pg_attribute a6 = {
  * table of a particular class/type. In any case table is still the word
  * used in SQL.
  */
-static FormData_pg_attribute a7 = {
+static const FormData_pg_attribute a7 = {
 	.attname = {"tableoid"},
 	.atttypid = OIDOID,
 	.attlen = sizeof(Oid),
@@ -248,14 +248,14 @@ static FormData_pg_attribute a7 = {
 	.attislocal = true,
 };
 
-static const Form_pg_attribute SysAtt[] = {&a1, &a2, &a3, &a4, &a5, &a6, &a7};
+static const FormData_pg_attribute *SysAtt[] = {&a1, &a2, &a3, &a4, &a5, &a6, &a7};
 
 /*
  * This function returns a Form_pg_attribute pointer for a system attribute.
  * Note that we elog if the presented attno is invalid, which would only
  * happen if there's a problem upstream.
  */
-Form_pg_attribute
+const FormData_pg_attribute *
 SystemAttributeDefinition(AttrNumber attno, bool relhasoids)
 {
 	if (attno >= 0 || attno < -(int) lengthof(SysAtt))
@@ -269,14 +269,14 @@ SystemAttributeDefinition(AttrNumber attno, bool relhasoids)
  * If the given name is a system attribute name, return a Form_pg_attribute
  * pointer for a prototype definition.  If not, return NULL.
  */
-Form_pg_attribute
+const FormData_pg_attribute *
 SystemAttributeByName(const char *attname, bool relhasoids)
 {
 	int			j;
 
 	for (j = 0; j < (int) lengthof(SysAtt); j++)
 	{
-		Form_pg_attribute att = SysAtt[j];
+		const FormData_pg_attribute *att = SysAtt[j];
 
 		if (relhasoids || att->attnum != ObjectIdAttributeNumber)
 		{
@@ -353,7 +353,6 @@ heap_create(const char *relname,
 		case RELKIND_COMPOSITE_TYPE:
 		case RELKIND_FOREIGN_TABLE:
 		case RELKIND_PARTITIONED_TABLE:
-		case RELKIND_PARTITIONED_INDEX:
 			create_storage = false;
 
 			/*
@@ -362,6 +361,15 @@ heap_create(const char *relname,
 			 */
 			reltablespace = InvalidOid;
 			break;
+
+		case RELKIND_PARTITIONED_INDEX:
+			/*
+			 * Preserve tablespace so that it's used as tablespace for indexes
+			 * on future partitions.
+			 */
+			create_storage = false;
+			break;
+
 		case RELKIND_SEQUENCE:
 			create_storage = true;
 
@@ -1367,12 +1375,15 @@ heap_create_with_catalog(const char *relname,
 		myself.classId = RelationRelationId;
 		myself.objectId = relid;
 		myself.objectSubId = 0;
+
 		referenced.classId = NamespaceRelationId;
 		referenced.objectId = relnamespace;
 		referenced.objectSubId = 0;
 		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
 
 		recordDependencyOnOwner(RelationRelationId, relid, ownerid);
+
+		recordDependencyOnNewAcl(RelationRelationId, relid, 0, ownerid, relacl);
 
 		recordDependencyOnCurrentExtension(&myself, false);
 
@@ -1382,18 +1393,6 @@ heap_create_with_catalog(const char *relname,
 			referenced.objectId = reloftypeid;
 			referenced.objectSubId = 0;
 			recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
-		}
-
-		if (relacl != NULL)
-		{
-			int			nnewmembers;
-			Oid		   *newmembers;
-
-			nnewmembers = aclmembers(relacl, &newmembers);
-			updateAclDependencies(RelationRelationId, relid, 0,
-								  ownerid,
-								  0, NULL,
-								  nnewmembers, newmembers);
 		}
 	}
 
@@ -2152,7 +2151,6 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 				 Node *expr, bool is_internal, bool add_column_mode)
 {
 	char	   *adbin;
-	char	   *adsrc;
 	Relation	adrel;
 	HeapTuple	tuple;
 	Datum		values[4];
@@ -2170,20 +2168,11 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 	adbin = nodeToString(expr);
 
 	/*
-	 * Also deparse it to form the mostly-obsolete adsrc field.
-	 */
-	adsrc = deparse_expression(expr,
-							   deparse_context_for(RelationGetRelationName(rel),
-												   RelationGetRelid(rel)),
-							   false, false);
-
-	/*
 	 * Make the pg_attrdef entry.
 	 */
 	values[Anum_pg_attrdef_adrelid - 1] = RelationGetRelid(rel);
 	values[Anum_pg_attrdef_adnum - 1] = attnum;
 	values[Anum_pg_attrdef_adbin - 1] = CStringGetTextDatum(adbin);
-	values[Anum_pg_attrdef_adsrc - 1] = CStringGetTextDatum(adsrc);
 
 	adrel = heap_open(AttrDefaultRelationId, RowExclusiveLock);
 
@@ -2198,10 +2187,8 @@ StoreAttrDefault(Relation rel, AttrNumber attnum,
 
 	/* now can free some of the stuff allocated above */
 	pfree(DatumGetPointer(values[Anum_pg_attrdef_adbin - 1]));
-	pfree(DatumGetPointer(values[Anum_pg_attrdef_adsrc - 1]));
 	heap_freetuple(tuple);
 	pfree(adbin);
-	pfree(adsrc);
 
 	/*
 	 * Update the pg_attribute entry for the column to show that a default
@@ -2327,7 +2314,6 @@ StoreRelCheck(Relation rel, const char *ccname, Node *expr,
 			  bool is_no_inherit, bool is_internal)
 {
 	char	   *ccbin;
-	char	   *ccsrc;
 	List	   *varList;
 	int			keycount;
 	int16	   *attNos;
@@ -2337,14 +2323,6 @@ StoreRelCheck(Relation rel, const char *ccname, Node *expr,
 	 * Flatten expression to string form for storage.
 	 */
 	ccbin = nodeToString(expr);
-
-	/*
-	 * Also deparse it to form the mostly-obsolete consrc field.
-	 */
-	ccsrc = deparse_expression(expr,
-							   deparse_context_for(RelationGetRelationName(rel),
-												   RelationGetRelid(rel)),
-							   false, false);
 
 	/*
 	 * Find columns of rel that are used in expr
@@ -2418,14 +2396,12 @@ StoreRelCheck(Relation rel, const char *ccname, Node *expr,
 							  NULL, /* not an exclusion constraint */
 							  expr, /* Tree form of check constraint */
 							  ccbin,	/* Binary form of check constraint */
-							  ccsrc,	/* Source form of check constraint */
 							  is_local, /* conislocal */
 							  inhcount, /* coninhcount */
 							  is_no_inherit,	/* connoinherit */
 							  is_internal); /* internally constructed? */
 
 	pfree(ccbin);
-	pfree(ccsrc);
 
 	return constrOid;
 }
@@ -3195,6 +3171,13 @@ void
 heap_truncate_one_rel(Relation rel)
 {
 	Oid			toastrelid;
+
+	/*
+	 * Truncate the relation.  Partitioned tables have no storage, so there is
+	 * nothing to do for them here.
+	 */
+	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+		return;
 
 	/* Truncate the actual file (and discard buffers) */
 	RelationTruncate(rel, 0);

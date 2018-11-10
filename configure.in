@@ -1045,14 +1045,15 @@ documentation for details.  Use --without-perl to disable building
 PL/Perl.])
   fi
   # On most platforms, archlibexp is also where the Perl include files live ...
-  perl_includedir="$perl_archlibexp"
-  # ... but on some macOS versions, we must look under $PG_SYSROOT instead
-  if test x"$PG_SYSROOT" != x"" ; then
-    if test -d "$PG_SYSROOT$perl_archlibexp" ; then
-      perl_includedir="$PG_SYSROOT$perl_archlibexp"
+  perl_includespec="-I$perl_archlibexp/CORE"
+  # ... but on newer macOS versions, we must use -iwithsysroot to look
+  # under $PG_SYSROOT
+  if test \! -f "$perl_archlibexp/CORE/perl.h" ; then
+    if test -f "$PG_SYSROOT$perl_archlibexp/CORE/perl.h" ; then
+      perl_includespec="-iwithsysroot $perl_archlibexp/CORE"
     fi
   fi
-  AC_SUBST(perl_includedir)dnl
+  AC_SUBST(perl_includespec)dnl
   PGAC_CHECK_PERL_EMBED_CCFLAGS
   PGAC_CHECK_PERL_EMBED_LDFLAGS
 fi
@@ -1294,6 +1295,7 @@ AC_HEADER_STDBOOL
 
 AC_CHECK_HEADERS(m4_normalize([
 	atomic.h
+	copyfile.h
 	crypt.h
 	fp_class.h
 	getopt.h
@@ -1601,6 +1603,7 @@ LIBS=`echo "$LIBS" | sed -e 's/-ledit//g' -e 's/-lreadline//g'`
 AC_CHECK_FUNCS(m4_normalize([
 	cbrt
 	clock_gettime
+	copyfile
 	fdatasync
 	getifaddrs
 	getpeerucred
@@ -1651,14 +1654,11 @@ AC_CHECK_DECLS(F_FULLFSYNC, [], [], [#include <fcntl.h>])
 
 AC_CHECK_DECLS([RTLD_GLOBAL, RTLD_NOW], [], [], [#include <dlfcn.h>])
 
-HAVE_IPV6=no
 AC_CHECK_TYPE([struct sockaddr_in6],
-        [AC_DEFINE(HAVE_IPV6, 1, [Define to 1 if you have support for IPv6.])
-         HAVE_IPV6=yes],
+        [AC_DEFINE(HAVE_IPV6, 1, [Define to 1 if you have support for IPv6.])],
         [],
 [$ac_includes_default
 #include <netinet/in.h>])
-AC_SUBST(HAVE_IPV6)
 
 AC_CACHE_CHECK([for PS_STRINGS], [pgac_cv_var_PS_STRINGS],
 [AC_LINK_IFELSE([AC_LANG_PROGRAM(
@@ -1700,6 +1700,8 @@ AC_REPLACE_FUNCS(m4_normalize([
 	getrusage
 	inet_aton
 	mkdtemp
+	pread
+	pwrite
 	random
 	rint
 	srandom
@@ -2221,7 +2223,7 @@ fi
 # check for <perl.h>
 if test "$with_perl" = yes; then
   ac_save_CPPFLAGS=$CPPFLAGS
-  CPPFLAGS="$CPPFLAGS -I$perl_includedir/CORE"
+  CPPFLAGS="$CPPFLAGS $perl_includespec"
   AC_CHECK_HEADER(perl.h, [], [AC_MSG_ERROR([header file <perl.h> is required for Perl])],
                   [#include <EXTERN.h>])
   # While we're at it, check that we can link to libperl.
@@ -2355,6 +2357,15 @@ tr '.' '	' |
 $AWK '{printf "%d%04d", $1, $2}'`"]
 AC_DEFINE_UNQUOTED(PG_VERSION_NUM, $PG_VERSION_NUM, [PostgreSQL version as a number])
 AC_SUBST(PG_VERSION_NUM)
+
+# If we are inserting PG_SYSROOT into CPPFLAGS, do so symbolically not
+# literally, so that it's possible to override it at build time using
+# a command like "make ... PG_SYSROOT=path".  This has to be done after
+# we've finished all configure checks that depend on CPPFLAGS.
+if test x"$PG_SYSROOT" != x; then
+  CPPFLAGS=`echo "$CPPFLAGS" | sed -e "s| $PG_SYSROOT | \\\$(PG_SYSROOT) |"`
+fi
+AC_SUBST(PG_SYSROOT)
 
 
 # Begin output steps

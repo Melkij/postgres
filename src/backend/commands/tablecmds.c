@@ -450,6 +450,7 @@ static bool ATPrepChangePersistence(Relation rel, bool toLogged);
 static void ATPrepSetTableSpace(AlteredTableInfo *tab, Relation rel,
 					const char *tablespacename, LOCKMODE lockmode);
 static void ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode);
+static void ATExecPartedIdxSetTableSpace(Relation rel, Oid newTableSpace);
 static void ATExecSetRelOptions(Relation rel, List *defList,
 					AlterTableType operation,
 					LOCKMODE lockmode);
@@ -835,7 +836,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
 		if (OidIsValid(defaultPartOid))
 			defaultRel = heap_open(defaultPartOid, AccessExclusiveLock);
 
-		/* Tranform the bound values */
+		/* Transform the bound values */
 		pstate = make_parsestate(NULL);
 		pstate->p_sourcetext = queryString;
 
@@ -1893,17 +1894,6 @@ MergeAttributes(List *schema, List *supers, char relpersistence,
 						MaxHeapAttributeNumber)));
 
 	/*
-	 * In case of a partition, there are no new column definitions, only dummy
-	 * ColumnDefs created for column constraints.  We merge them with the
-	 * constraints inherited from the parent.
-	 */
-	if (is_partition)
-	{
-		saved_schema = schema;
-		schema = NIL;
-	}
-
-	/*
 	 * Check for duplicate names in the explicit list of attributes.
 	 *
 	 * Although we might consider merging such entries in the same way that we
@@ -1916,17 +1906,19 @@ MergeAttributes(List *schema, List *supers, char relpersistence,
 		ListCell   *rest = lnext(entry);
 		ListCell   *prev = entry;
 
-		if (coldef->typeName == NULL)
-
+		if (!is_partition && coldef->typeName == NULL)
+		{
 			/*
 			 * Typed table column option that does not belong to a column from
 			 * the type.  This works because the columns from the type come
-			 * first in the list.
+			 * first in the list.  (We omit this check for partition column
+			 * lists; those are processed separately below.)
 			 */
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_COLUMN),
 					 errmsg("column \"%s\" does not exist",
 							coldef->colname)));
+		}
 
 		while (rest != NULL)
 		{
@@ -1957,6 +1949,17 @@ MergeAttributes(List *schema, List *supers, char relpersistence,
 			prev = rest;
 			rest = next;
 		}
+	}
+
+	/*
+	 * In case of a partition, there are no new column definitions, only dummy
+	 * ColumnDefs created for column constraints.  Set them aside for now and
+	 * process them at the end.
+	 */
+	if (is_partition)
+	{
+		saved_schema = schema;
+		schema = NIL;
 	}
 
 	/*
@@ -1992,6 +1995,14 @@ MergeAttributes(List *schema, List *supers, char relpersistence,
 			relation = heap_openrv(parent, ShareUpdateExclusiveLock);
 		else
 			relation = heap_openrv(parent, AccessExclusiveLock);
+
+		/*
+		 * Check for active uses of the parent partitioned table in the
+		 * current transaction, such as being used in some manner by an
+		 * enclosing command.
+		 */
+		if (is_partition)
+			CheckTableNotInUse(relation, "CREATE TABLE .. PARTITION OF");
 
 		/*
 		 * We do not allow partitioned tables and partitions to participate in
@@ -2167,7 +2178,6 @@ MergeAttributes(List *schema, List *supers, char relpersistence,
 				def->is_local = false;
 				def->is_not_null = attribute->attnotnull;
 				def->is_from_type = false;
-				def->is_from_parent = true;
 				def->storage = attribute->attstorage;
 				def->raw_default = NULL;
 				def->cooked_default = NULL;
@@ -2420,59 +2430,51 @@ MergeAttributes(List *schema, List *supers, char relpersistence,
 	/*
 	 * Now that we have the column definition list for a partition, we can
 	 * check whether the columns referenced in the column constraint specs
-	 * actually exist.  Also, we merge the constraints into the corresponding
-	 * column definitions.
+	 * actually exist.  Also, we merge NOT NULL and defaults into each
+	 * corresponding column definition.
 	 */
-	if (is_partition && list_length(saved_schema) > 0)
+	if (is_partition)
 	{
-		schema = list_concat(schema, saved_schema);
-
-		foreach(entry, schema)
+		foreach(entry, saved_schema)
 		{
-			ColumnDef  *coldef = lfirst(entry);
-			ListCell   *rest = lnext(entry);
-			ListCell   *prev = entry;
+			ColumnDef  *restdef = lfirst(entry);
+			bool		found = false;
+			ListCell   *l;
 
-			/*
-			 * Partition column option that does not belong to a column from
-			 * the parent.  This works because the columns from the parent
-			 * come first in the list (see above).
-			 */
-			if (coldef->typeName == NULL)
-				ereport(ERROR,
-						(errcode(ERRCODE_UNDEFINED_COLUMN),
-						 errmsg("column \"%s\" does not exist",
-								coldef->colname)));
-			while (rest != NULL)
+			foreach(l, schema)
 			{
-				ColumnDef  *restdef = lfirst(rest);
-				ListCell   *next = lnext(rest); /* need to save it in case we
-												 * delete it */
+				ColumnDef  *coldef = lfirst(l);
 
 				if (strcmp(coldef->colname, restdef->colname) == 0)
 				{
+					found = true;
+					coldef->is_not_null |= restdef->is_not_null;
+
 					/*
-					 * merge the column options into the column from the
-					 * parent
+					 * Override the parent's default value for this column
+					 * (coldef->cooked_default) with the partition's local
+					 * definition (restdef->raw_default), if there's one. It
+					 * should be physically impossible to get a cooked default
+					 * in the local definition or a raw default in the
+					 * inherited definition, but make sure they're nulls, for
+					 * future-proofing.
 					 */
-					if (coldef->is_from_parent)
+					Assert(restdef->cooked_default == NULL);
+					Assert(coldef->raw_default == NULL);
+					if (restdef->raw_default)
 					{
-						coldef->is_not_null = restdef->is_not_null;
 						coldef->raw_default = restdef->raw_default;
-						coldef->cooked_default = restdef->cooked_default;
-						coldef->constraints = restdef->constraints;
-						coldef->is_from_parent = false;
-						list_delete_cell(schema, rest, prev);
+						coldef->cooked_default = NULL;
 					}
-					else
-						ereport(ERROR,
-								(errcode(ERRCODE_DUPLICATE_COLUMN),
-								 errmsg("column \"%s\" specified more than once",
-										coldef->colname)));
 				}
-				prev = rest;
-				rest = next;
 			}
+
+			/* complain for constraints on columns not in parent */
+			if (!found)
+				ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_COLUMN),
+						 errmsg("column \"%s\" does not exist",
+								restdef->colname)));
 		}
 	}
 
@@ -3876,7 +3878,8 @@ ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 			pass = AT_PASS_DROP;
 			break;
 		case AT_SetTableSpace:	/* SET TABLESPACE */
-			ATSimplePermissions(rel, ATT_TABLE | ATT_MATVIEW | ATT_INDEX);
+			ATSimplePermissions(rel, ATT_TABLE | ATT_MATVIEW | ATT_INDEX |
+								ATT_PARTITIONED_INDEX);
 			/* This command never recurses */
 			ATPrepSetTableSpace(tab, rel, cmd->name, lockmode);
 			pass = AT_PASS_MISC;	/* doesn't actually matter */
@@ -4212,10 +4215,13 @@ ATExecCmd(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			 */
 			break;
 		case AT_SetTableSpace:	/* SET TABLESPACE */
-
 			/*
-			 * Nothing to do here; Phase 3 does the work
+			 * Only do this for partitioned indexes, for which this is just
+			 * a catalog change.  Other relation types are handled by Phase 3.
 			 */
+			if (rel->rd_rel->relkind == RELKIND_PARTITIONED_INDEX)
+				ATExecPartedIdxSetTableSpace(rel, tab->newTableSpace);
+
 			break;
 		case AT_SetRelOptions:	/* SET (...) */
 		case AT_ResetRelOptions:	/* RESET (...) */
@@ -5918,6 +5924,7 @@ static ObjectAddress
 ATExecDropNotNull(Relation rel, const char *colName, LOCKMODE lockmode)
 {
 	HeapTuple	tuple;
+	Form_pg_attribute attTup;
 	AttrNumber	attnum;
 	Relation	attr_rel;
 	List	   *indexoidlist;
@@ -5930,14 +5937,13 @@ ATExecDropNotNull(Relation rel, const char *colName, LOCKMODE lockmode)
 	attr_rel = heap_open(AttributeRelationId, RowExclusiveLock);
 
 	tuple = SearchSysCacheCopyAttName(RelationGetRelid(rel), colName);
-
 	if (!HeapTupleIsValid(tuple))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_COLUMN),
 				 errmsg("column \"%s\" of relation \"%s\" does not exist",
 						colName, RelationGetRelationName(rel))));
-
-	attnum = ((Form_pg_attribute) GETSTRUCT(tuple))->attnum;
+	attTup = (Form_pg_attribute) GETSTRUCT(tuple);
+	attnum = attTup->attnum;
 
 	/* Prevent them from altering a system attribute */
 	if (attnum <= 0)
@@ -5946,7 +5952,7 @@ ATExecDropNotNull(Relation rel, const char *colName, LOCKMODE lockmode)
 				 errmsg("cannot alter system column \"%s\"",
 						colName)));
 
-	if (get_attidentity(RelationGetRelid(rel), attnum))
+	if (attTup->attidentity)
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("column \"%s\" of relation \"%s\" is an identity column",
@@ -6015,9 +6021,9 @@ ATExecDropNotNull(Relation rel, const char *colName, LOCKMODE lockmode)
 	/*
 	 * Okay, actually perform the catalog change ... if needed
 	 */
-	if (((Form_pg_attribute) GETSTRUCT(tuple))->attnotnull)
+	if (attTup->attnotnull)
 	{
-		((Form_pg_attribute) GETSTRUCT(tuple))->attnotnull = false;
+		attTup->attnotnull = false;
 
 		CatalogTupleUpdate(attr_rel, &tuple->t_self, tuple);
 
@@ -6178,6 +6184,7 @@ static ObjectAddress
 ATExecColumnDefault(Relation rel, const char *colName,
 					Node *newDefault, LOCKMODE lockmode)
 {
+	TupleDesc	tupdesc = RelationGetDescr(rel);
 	AttrNumber	attnum;
 	ObjectAddress address;
 
@@ -6198,7 +6205,7 @@ ATExecColumnDefault(Relation rel, const char *colName,
 				 errmsg("cannot alter system column \"%s\"",
 						colName)));
 
-	if (get_attidentity(RelationGetRelid(rel), attnum))
+	if (TupleDescAttr(tupdesc, attnum - 1)->attidentity)
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("column \"%s\" of relation \"%s\" is an identity column",
@@ -7752,7 +7759,6 @@ ATAddForeignKeyConstraint(List **wqueue, AlteredTableInfo *tab, Relation rel,
 									  fkconstraint->fk_matchtype,
 									  NULL, /* no exclusion constraint */
 									  NULL, /* no check constraint */
-									  NULL,
 									  NULL,
 									  true, /* islocal */
 									  0,	/* inhcount */
@@ -11131,6 +11137,55 @@ ATExecSetTableSpace(Oid tableOid, Oid newTableSpace, LOCKMODE lockmode)
 }
 
 /*
+ * Special handling of ALTER TABLE SET TABLESPACE for partitioned indexes,
+ * which have no storage (so not handled in Phase 3 like other relation types)
+ */
+static void
+ATExecPartedIdxSetTableSpace(Relation rel, Oid newTableSpace)
+{
+	HeapTuple	tuple;
+	Oid			oldTableSpace;
+	Relation	pg_class;
+	Form_pg_class rd_rel;
+	Oid			indexOid = RelationGetRelid(rel);
+
+	Assert(rel->rd_rel->relkind == RELKIND_PARTITIONED_INDEX);
+
+	/*
+	 * No work if no change in tablespace.
+	 */
+	oldTableSpace = rel->rd_rel->reltablespace;
+	if (newTableSpace == oldTableSpace ||
+		(newTableSpace == MyDatabaseTableSpace && oldTableSpace == 0))
+	{
+		InvokeObjectPostAlterHook(RelationRelationId,
+								  indexOid, 0);
+		return;
+	}
+
+	/* Get a modifiable copy of the relation's pg_class row */
+	pg_class = heap_open(RelationRelationId, RowExclusiveLock);
+
+	tuple = SearchSysCacheCopy1(RELOID, ObjectIdGetDatum(indexOid));
+	if (!HeapTupleIsValid(tuple))
+		elog(ERROR, "cache lookup failed for relation %u", indexOid);
+	rd_rel = (Form_pg_class) GETSTRUCT(tuple);
+
+	/* update the pg_class row */
+	rd_rel->reltablespace = (newTableSpace == MyDatabaseTableSpace) ? InvalidOid : newTableSpace;
+	CatalogTupleUpdate(pg_class, &tuple->t_self, tuple);
+
+	InvokeObjectPostAlterHook(RelationRelationId, indexOid, 0);
+
+	heap_freetuple(tuple);
+
+	heap_close(pg_class, RowExclusiveLock);
+
+	/* Make sure the reltablespace change is visible */
+	CommandCounterIncrement();
+}
+
+/*
  * Alter Table ALL ... SET TABLESPACE
  *
  * Allows a user to move all objects of some type in a given tablespace in the
@@ -13288,6 +13343,7 @@ PreCommit_on_commit_actions(void)
 {
 	ListCell   *l;
 	List	   *oids_to_truncate = NIL;
+	List	   *oids_to_drop = NIL;
 
 	foreach(l, on_commits)
 	{
@@ -13314,35 +13370,65 @@ PreCommit_on_commit_actions(void)
 					oids_to_truncate = lappend_oid(oids_to_truncate, oc->relid);
 				break;
 			case ONCOMMIT_DROP:
-				{
-					ObjectAddress object;
-
-					object.classId = RelationRelationId;
-					object.objectId = oc->relid;
-					object.objectSubId = 0;
-
-					/*
-					 * Since this is an automatic drop, rather than one
-					 * directly initiated by the user, we pass the
-					 * PERFORM_DELETION_INTERNAL flag.
-					 */
-					performDeletion(&object,
-									DROP_CASCADE, PERFORM_DELETION_INTERNAL);
-
-					/*
-					 * Note that table deletion will call
-					 * remove_on_commit_action, so the entry should get marked
-					 * as deleted.
-					 */
-					Assert(oc->deleting_subid != InvalidSubTransactionId);
-					break;
-				}
+				oids_to_drop = lappend_oid(oids_to_drop, oc->relid);
+				break;
 		}
 	}
+
+	/*
+	 * Truncate relations before dropping so that all dependencies between
+	 * relations are removed after they are worked on.  Doing it like this
+	 * might be a waste as it is possible that a relation being truncated will
+	 * be dropped anyway due to its parent being dropped, but this makes the
+	 * code more robust because of not having to re-check that the relation
+	 * exists at truncation time.
+	 */
 	if (oids_to_truncate != NIL)
 	{
 		heap_truncate(oids_to_truncate);
 		CommandCounterIncrement();	/* XXX needed? */
+	}
+	if (oids_to_drop != NIL)
+	{
+		ObjectAddresses *targetObjects = new_object_addresses();
+		ListCell   *l;
+
+		foreach(l, oids_to_drop)
+		{
+			ObjectAddress object;
+
+			object.classId = RelationRelationId;
+			object.objectId = lfirst_oid(l);
+			object.objectSubId = 0;
+
+			Assert(!object_address_present(&object, targetObjects));
+
+			add_exact_object_address(&object, targetObjects);
+		}
+
+		/*
+		 * Since this is an automatic drop, rather than one directly initiated
+		 * by the user, we pass the PERFORM_DELETION_INTERNAL flag.
+		 */
+		performMultipleDeletions(targetObjects, DROP_CASCADE,
+								 PERFORM_DELETION_INTERNAL | PERFORM_DELETION_QUIETLY);
+
+#ifdef USE_ASSERT_CHECKING
+
+		/*
+		 * Note that table deletion will call remove_on_commit_action, so the
+		 * entry should get marked as deleted.
+		 */
+		foreach(l, on_commits)
+		{
+			OnCommitItem *oc = (OnCommitItem *) lfirst(l);
+
+			if (oc->oncommit != ONCOMMIT_DROP)
+				continue;
+
+			Assert(oc->deleting_subid != InvalidSubTransactionId);
+		}
+#endif
 	}
 }
 
@@ -14141,6 +14227,11 @@ ATExecAttachPartition(List **wqueue, Relation rel, PartitionCmd *cmd)
 	attachrel = heap_openrv(cmd->name, AccessExclusiveLock);
 
 	/*
+	 * XXX I think it'd be a good idea to grab locks on all tables referenced
+	 * by FKs at this point also.
+	 */
+
+	/*
 	 * Must be owner of both parent and source table -- parent was checked by
 	 * ATSimplePermissions call in ATPrepCmd
 	 */
@@ -14712,6 +14803,7 @@ ATExecDetachPartition(Relation rel, RangeVar *name)
 	ObjectAddress address;
 	Oid			defaultPartOid;
 	List	   *indexes;
+	List	   *fks;
 	ListCell   *cell;
 
 	/*
@@ -14786,6 +14878,23 @@ ATExecDetachPartition(Relation rel, RangeVar *name)
 		relation_close(idx, AccessExclusiveLock);
 	}
 	heap_close(classRel, RowExclusiveLock);
+
+	/* Detach foreign keys */
+	fks = copyObject(RelationGetFKeyList(partRel));
+	foreach(cell, fks)
+	{
+		ForeignKeyCacheInfo *fk = lfirst(cell);
+		HeapTuple	contup;
+
+		contup = SearchSysCache1(CONSTROID, ObjectIdGetDatum(fk->conoid));
+		if (!contup)
+			elog(ERROR, "cache lookup failed for constraint %u", fk->conoid);
+
+		ConstraintSetParentConstraint(fk->conoid, InvalidOid);
+
+		ReleaseSysCache(contup);
+	}
+	list_free_deep(fks);
 
 	/*
 	 * Invalidate the parent's relcache so that the partition is no longer

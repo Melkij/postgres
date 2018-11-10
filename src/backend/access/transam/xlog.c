@@ -78,12 +78,6 @@
 
 extern uint32 bootstrap_data_checksum_version;
 
-/* File path names (all relative to $PGDATA) */
-#define RECOVERY_COMMAND_FILE	"recovery.conf"
-#define RECOVERY_COMMAND_DONE	"recovery.done"
-#define PROMOTE_SIGNAL_FILE		"promote"
-#define FALLBACK_PROMOTE_SIGNAL_FILE "fallback_promote"
-
 
 /* User-settable parameters */
 int			max_wal_size_mb = 1024; /* 1 GB */
@@ -2484,18 +2478,6 @@ XLogWrite(XLogwrtRqst WriteRqst, bool flexible)
 			Size		nleft;
 			int			written;
 
-			/* Need to seek in the file? */
-			if (openLogOff != startoffset)
-			{
-				if (lseek(openLogFile, (off_t) startoffset, SEEK_SET) < 0)
-					ereport(PANIC,
-							(errcode_for_file_access(),
-							 errmsg("could not seek in log file %s to offset %u: %m",
-									XLogFileNameP(ThisTimeLineID, openLogSegNo),
-									startoffset)));
-				openLogOff = startoffset;
-			}
-
 			/* OK to write the page(s) */
 			from = XLogCtl->pages + startidx * (Size) XLOG_BLCKSZ;
 			nbytes = npages * (Size) XLOG_BLCKSZ;
@@ -2504,7 +2486,7 @@ XLogWrite(XLogwrtRqst WriteRqst, bool flexible)
 			{
 				errno = 0;
 				pgstat_report_wait_start(WAIT_EVENT_WAL_WRITE);
-				written = write(openLogFile, from, nleft);
+				written = pg_pwrite(openLogFile, from, nleft, startoffset);
 				pgstat_report_wait_end();
 				if (written <= 0)
 				{
@@ -2519,6 +2501,7 @@ XLogWrite(XLogwrtRqst WriteRqst, bool flexible)
 				}
 				nleft -= written;
 				from += written;
+				startoffset += written;
 			} while (nleft > 0);
 
 			/* Update state for write */
@@ -5585,7 +5568,7 @@ readRecoveryCommandFile(void)
 	}
 
 	/*
-	 * Override any inconsistent requests. Not that this is a change of
+	 * Override any inconsistent requests. Note that this is a change of
 	 * behaviour in 9.5; prior to this we simply ignored a request to pause if
 	 * hot_standby = off, which was surprising behaviour.
 	 */
@@ -11827,22 +11810,9 @@ retry:
 
 	/* Read the requested page */
 	readOff = targetPageOff;
-	if (lseek(readFile, (off_t) readOff, SEEK_SET) < 0)
-	{
-		char		fname[MAXFNAMELEN];
-		int			save_errno = errno;
-
-		XLogFileName(fname, curFileTLI, readSegNo, wal_segment_size);
-		errno = save_errno;
-		ereport(emode_for_corrupt_record(emode, targetPagePtr + reqLen),
-				(errcode_for_file_access(),
-				 errmsg("could not seek in log segment %s to offset %u: %m",
-						fname, readOff)));
-		goto next_record_is_invalid;
-	}
 
 	pgstat_report_wait_start(WAIT_EVENT_WAL_READ);
-	r = read(readFile, readBuf, XLOG_BLCKSZ);
+	r = pg_pread(readFile, readBuf, XLOG_BLCKSZ, (off_t) readOff);
 	if (r != XLOG_BLCKSZ)
 	{
 		char		fname[MAXFNAMELEN];

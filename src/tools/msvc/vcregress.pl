@@ -11,6 +11,8 @@ use File::Basename;
 use File::Copy;
 use File::Find ();
 use File::Path qw(rmtree);
+use File::Spec;
+BEGIN  { use lib File::Spec->rel2abs(dirname(__FILE__)); }
 
 use Install qw(Install);
 
@@ -557,7 +559,7 @@ sub upgradecheck
 	generate_db('',       91, 127, '');
 
 	print "\nSetting up data for upgrading\n\n";
-	installcheck();
+	installcheck('parallel');
 
 	# now we can chdir into the source dir
 	chdir "$topdir/src/bin/pg_upgrade";

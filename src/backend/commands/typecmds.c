@@ -2179,6 +2179,9 @@ AlterDomainDefault(List *names, Node *defaultRaw)
 	Relation	rel;
 	char	   *defaultValue;
 	Node	   *defaultExpr = NULL; /* NULL if no default specified */
+	Acl		   *typacl;
+	Datum		aclDatum;
+	bool		isNull;
 	Datum		new_record[Natts_pg_type];
 	bool		new_record_nulls[Natts_pg_type];
 	bool		new_record_repl[Natts_pg_type];
@@ -2270,25 +2273,23 @@ AlterDomainDefault(List *names, Node *defaultRaw)
 
 	CatalogTupleUpdate(rel, &tup->t_self, newtuple);
 
+	/* Must extract ACL for use of GenerateTypeDependencies */
+	aclDatum = heap_getattr(newtuple, Anum_pg_type_typacl,
+							RelationGetDescr(rel), &isNull);
+	if (isNull)
+		typacl = NULL;
+	else
+		typacl = DatumGetAclPCopy(aclDatum);
+
 	/* Rebuild dependencies */
-	GenerateTypeDependencies(typTup->typnamespace,
-							 domainoid,
-							 InvalidOid,	/* typrelid is n/a */
-							 0, /* relation kind is n/a */
-							 typTup->typowner,
-							 typTup->typinput,
-							 typTup->typoutput,
-							 typTup->typreceive,
-							 typTup->typsend,
-							 typTup->typmodin,
-							 typTup->typmodout,
-							 typTup->typanalyze,
-							 InvalidOid,
-							 false, /* a domain isn't an implicit array */
-							 typTup->typbasetype,
-							 typTup->typcollation,
+	GenerateTypeDependencies(domainoid,
+							 (Form_pg_type) GETSTRUCT(newtuple),
 							 defaultExpr,
-							 true); /* Rebuild is true */
+							 typacl,
+							 0, /* relation kind is n/a */
+							 false, /* a domain isn't an implicit array */
+							 false, /* nor is it any kind of dependent type */
+							 true); /* We do need to rebuild dependencies */
 
 	InvokeObjectPostAlterHook(TypeRelationId, domainoid, 0);
 
@@ -3042,7 +3043,6 @@ domainAddConstraint(Oid domainOid, Oid domainNamespace, Oid baseTypeOid,
 					const char *domainName, ObjectAddress *constrAddr)
 {
 	Node	   *expr;
-	char	   *ccsrc;
 	char	   *ccbin;
 	ParseState *pstate;
 	CoerceToDomainValue *domVal;
@@ -3117,12 +3117,6 @@ domainAddConstraint(Oid domainOid, Oid domainNamespace, Oid baseTypeOid,
 	ccbin = nodeToString(expr);
 
 	/*
-	 * Deparse it to produce text for consrc.
-	 */
-	ccsrc = deparse_expression(expr,
-							   NIL, false, false);
-
-	/*
 	 * Store the constraint in pg_constraint
 	 */
 	ccoid =
@@ -3151,7 +3145,6 @@ domainAddConstraint(Oid domainOid, Oid domainNamespace, Oid baseTypeOid,
 							  NULL, /* not an exclusion constraint */
 							  expr, /* Tree form of check constraint */
 							  ccbin,	/* Binary form of check constraint */
-							  ccsrc,	/* Source form of check constraint */
 							  true, /* is local */
 							  0,	/* inhcount */
 							  false,	/* connoinherit */

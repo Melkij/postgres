@@ -241,6 +241,7 @@ BITCODE_CXXFLAGS = @BITCODE_CXXFLAGS@
 
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
+PG_SYSROOT = @PG_SYSROOT@
 
 override CPPFLAGS := $(ICU_CFLAGS) $(CPPFLAGS)
 
@@ -331,7 +332,7 @@ else
 endif
 perl_archlibexp		= @perl_archlibexp@
 perl_privlibexp		= @perl_privlibexp@
-perl_includedir		= @perl_includedir@
+perl_includespec	= @perl_includespec@
 perl_embed_ccflags	= @perl_embed_ccflags@
 perl_embed_ldflags	= @perl_embed_ldflags@
 
@@ -495,9 +496,6 @@ build_os = @build_os@
 host_tuple = @host@
 host_os = @host_os@
 host_cpu = @host_cpu@
-
-# Make HAVE_IPV6 available for initdb script creation
-HAVE_IPV6= @HAVE_IPV6@
 
 # This is mainly for use on FreeBSD, where we have both a.out and elf
 # systems now.  May be applicable to other systems to?

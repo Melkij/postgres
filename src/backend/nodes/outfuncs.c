@@ -2874,7 +2874,6 @@ _outColumnDef(StringInfo str, const ColumnDef *node)
 	WRITE_BOOL_FIELD(is_local);
 	WRITE_BOOL_FIELD(is_not_null);
 	WRITE_BOOL_FIELD(is_from_type);
-	WRITE_BOOL_FIELD(is_from_parent);
 	WRITE_CHAR_FIELD(storage);
 	WRITE_NODE_FIELD(raw_default);
 	WRITE_NODE_FIELD(cooked_default);
@@ -3633,6 +3632,7 @@ _outForeignKeyCacheInfo(StringInfo str, const ForeignKeyCacheInfo *node)
 
 	WRITE_NODE_TYPE("FOREIGNKEYCACHEINFO");
 
+	WRITE_OID_FIELD(conoid);
 	WRITE_OID_FIELD(conrelid);
 	WRITE_OID_FIELD(confrelid);
 	WRITE_INT_FIELD(nkeys);
