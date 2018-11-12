@@ -78,6 +78,7 @@
 
 extern uint32 bootstrap_data_checksum_version;
 
+
 /* User-settable parameters */
 int			max_wal_size_mb = 1024; /* 1 GB */
 int			min_wal_size_mb = 80;	/* 80 MB */
@@ -5386,107 +5387,7 @@ readRecoverySignalFile(void)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("standby mode is not supported by single-user servers")));
 
-	logRecoveryParameters();
 	validateRecoveryParameters();
-}
-
-void
-logRecoveryParameters(void)
-{
-	int			normal_log_level = DEBUG2;
-
-	/*
-	 * Log messages for recovery parameters at server start
-	 */
-	ereport(normal_log_level,
-			(errmsg_internal("standby_mode = '%s'", (StandbyModeRequested ? "on" : "off"))));
-
-	if (recoveryRestoreCommand != NULL)
-		ereport(normal_log_level,
-				(errmsg_internal("restore_command = '%s'", recoveryRestoreCommand)));
-
-	if (recoveryEndCommand != NULL)
-		ereport(normal_log_level,
-				(errmsg_internal("recovery_end_command = '%s'", recoveryEndCommand)));
-
-	if (archiveCleanupCommand != NULL)
-		ereport(normal_log_level,
-				(errmsg_internal("archive_cleanup_command = '%s'", archiveCleanupCommand)));
-
-	if (PrimaryConnInfo != NULL)
-		ereport(normal_log_level,
-				(errmsg_internal("primary_conninfo = '%s'", PrimaryConnInfo)));
-
-	if (PrimarySlotName != NULL)
-		ereport(normal_log_level,
-				(errmsg_internal("primary_slot_name = '%s'", PrimarySlotName)));
-
-	if (recovery_min_apply_delay > 0)
-		ereport(normal_log_level,
-				(errmsg_internal("recovery_min_apply_delay = '%u'", recovery_min_apply_delay)));
-
-	switch (recoveryTarget)
-	{
-		case RECOVERY_TARGET_UNSET:
-			/* no recovery target was requested */
-			break;
-		case RECOVERY_TARGET_XID:
-			ereport(normal_log_level,
-					(errmsg_internal("recovery_target_xid = %u",
-									 recoveryTargetXid)));
-			break;
-		case RECOVERY_TARGET_TIME:
-			ereport(normal_log_level,
-					(errmsg_internal("recovery_target_time = '%s'",
-									 timestamptz_to_str(recoveryTargetTime))));
-			break;
-		case RECOVERY_TARGET_NAME:
-			ereport(normal_log_level,
-					(errmsg_internal("recovery_target_name = '%s'",
-									 recoveryTargetName)));
-			break;
-		case RECOVERY_TARGET_LSN:
-			ereport(normal_log_level,
-					(errmsg_internal("recovery_target_lsn = '%X/%X'",
-									 (uint32) (recoveryTargetLSN >> 32),
-									 (uint32) recoveryTargetLSN)));
-			break;
-		case RECOVERY_TARGET_IMMEDIATE:
-			ereport(normal_log_level,
-					(errmsg_internal("recovery_target = '%s'",
-									 "immediate")));
-			break;
-	}
-
-	/*
-	 * Check details for recovery target, if any
-	 */
-	if (recoveryTarget > RECOVERY_TARGET_UNSET)
-	{
-		ereport(normal_log_level,
-				(errmsg_internal("recovery_target_inclusive = '%s'", (recoveryTargetInclusive ? "on " : "off"))));
-
-		switch (recoveryTargetTimeLineGoal)
-		{
-			case RECOVERY_TARGET_TIMELINE_CONTROLFILE:
-				ereport(normal_log_level,
-						(errmsg_internal("recovery_target_timeline = '%u' (from controlfile)",
-										 recoveryTargetTLI)));
-				break;
-			case RECOVERY_TARGET_TIMELINE_LATEST:
-				ereport(normal_log_level,
-						(errmsg_internal("recovery_target_timeline = 'latest'")));
-				break;
-			case RECOVERY_TARGET_TIMELINE_NUMERIC:
-				ereport(normal_log_level,
-						(errmsg_internal("recovery_target_timeline = '%u'",
-										 recoveryTargetTLIRequested)));
-				break;
-		}
-	}
-
-	ereport(normal_log_level,
-			(errmsg_internal("recovery_target_action = '%s'", RecoveryTargetActionText(recoveryTargetAction))));
 }
 
 void

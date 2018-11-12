@@ -3337,7 +3337,7 @@ static struct config_string ConfigureNamesString[] =
 			NULL
 		},
 		&recoveryRestoreCommand,
-		NULL,
+		"",
 		NULL, NULL, NULL
 	},
 
@@ -3347,7 +3347,7 @@ static struct config_string ConfigureNamesString[] =
 			NULL
 		},
 		&archiveCleanupCommand,
-		NULL,
+		"",
 		NULL, NULL, NULL
 	},
 
@@ -3357,7 +3357,7 @@ static struct config_string ConfigureNamesString[] =
 			NULL
 		},
 		&recoveryEndCommand,
-		NULL,
+		"",
 		NULL, NULL, NULL
 	},
 
@@ -3373,7 +3373,7 @@ static struct config_string ConfigureNamesString[] =
 
 	{
 		{"recovery_target", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
-			gettext_noop("Sets recovery should end as soon as a consistent state is reached"),
+			gettext_noop("Sets recovery should end as soon as a consistent state is reached."),
 			NULL
 		},
 		&recovery_target_string,
@@ -3382,7 +3382,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 	{
 		{"recovery_target_xid", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
-			gettext_noop("Sets the transaction ID up to which recovery will proceed"),
+			gettext_noop("Sets the transaction ID up to which recovery will proceed."),
 			NULL
 		},
 		&recovery_target_xid_string,
@@ -3391,7 +3391,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 	{
 		{"recovery_target_time", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
-			gettext_noop("Sets the time stamp up to which recovery will proceed"),
+			gettext_noop("Sets the time stamp up to which recovery will proceed."),
 			NULL
 		},
 		&recovery_target_time_string,
@@ -3400,7 +3400,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 	{
 		{"recovery_target_name", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
-			gettext_noop("Sets the named restore point up to which recovery will proceed"),
+			gettext_noop("Sets the named restore point up to which recovery will proceed."),
 			NULL
 		},
 		&recovery_target_name_string,
@@ -3409,7 +3409,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 	{
 		{"recovery_target_lsn", PGC_POSTMASTER, WAL_RECOVERY_TARGET,
-			gettext_noop("Sets the LSN of the write-ahead log location up to which recovery will proceed"),
+			gettext_noop("Sets the LSN of the write-ahead log location up to which recovery will proceed."),
 			NULL
 		},
 		&recovery_target_lsn_string,
@@ -3419,11 +3419,11 @@ static struct config_string ConfigureNamesString[] =
 
 	{
 		{"promote_trigger_file", PGC_POSTMASTER, REPLICATION_STANDBY,
-			gettext_noop("Specifies a filename whose presence ends recovery in the standby"),
+			gettext_noop("Specifies a filename whose presence ends recovery in the standby."),
 			NULL
 		},
 		&PromoteTriggerFile,
-		NULL,
+		"",
 		NULL, NULL, NULL
 	},
 
@@ -3434,7 +3434,7 @@ static struct config_string ConfigureNamesString[] =
 			GUC_SUPERUSER_ONLY
 		},
 		&PrimaryConnInfo,
-		NULL,
+		"",
 		NULL, NULL, NULL
 	},
 
@@ -3444,7 +3444,7 @@ static struct config_string ConfigureNamesString[] =
 			NULL
 		},
 		&PrimarySlotName,
-		NULL,
+		"",
 		check_primary_slot_name, NULL, NULL
 	},
 
@@ -11163,10 +11163,10 @@ static bool
 check_recovery_target_name(char **newval, void **extra, GucSource source)
 {
 	/* Use the value of newval directly */
-	if (strlen(*newval) > MAXRESTOREPOINTNAMELEN)
+	if (strlen(*newval) > MAXFNAMELEN)
 	{
 		GUC_check_errdetail("recovery_target_name is too long (maximum %d characters)",
-							MAXRESTOREPOINTNAMELEN);
+							MAXFNAMELEN);
 		return false;
 	}
 	return true;

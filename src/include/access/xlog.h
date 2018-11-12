@@ -97,10 +97,6 @@ typedef enum
 	RECOVERY_TARGET_ACTION_SHUTDOWN
 } RecoveryTargetAction;
 
-#define RecoveryTargetActionText(t) ( \
-	t == RECOVERY_TARGET_ACTION_PAUSE   ? "pause" : ( \
-	t == RECOVERY_TARGET_ACTION_PROMOTE ? "promote" : ( \
-						"shutdown" )))
 /*
  * Recovery target TimeLine goal
  */
@@ -110,9 +106,6 @@ typedef enum
 	RECOVERY_TARGET_TIMELINE_LATEST,
 	RECOVERY_TARGET_TIMELINE_NUMERIC
 }			RecoveryTargetTimeLineGoal;
-
-/* Max length of named restore points */
-#define MAXRESTOREPOINTNAMELEN 64
 
 extern XLogRecPtr ProcLastRecPtr;
 extern XLogRecPtr XactLastRecEnd;
@@ -296,7 +289,6 @@ extern const char *xlog_identify(uint8 info);
 
 extern void issue_xlog_fsync(int fd, XLogSegNo segno);
 
-extern void logRecoveryParameters(void);
 extern void validateRecoveryParameters(void);
 extern bool RecoveryInProgress(void);
 extern bool HotStandbyActive(void);
@@ -390,7 +382,7 @@ extern SessionBackupState get_backup_status(void);
 #define STANDBY_SIGNAL_FILE		"standby.signal"
 
 /* files to signal promotion to primary */
-#define PROMOTE_SIGNAL_FILE		"promote.signal"
-#define FALLBACK_PROMOTE_SIGNAL_FILE  "fallback_promote.signal"
+#define PROMOTE_SIGNAL_FILE		"promote"
+#define FALLBACK_PROMOTE_SIGNAL_FILE  "fallback_promote"
 
 #endif							/* XLOG_H */

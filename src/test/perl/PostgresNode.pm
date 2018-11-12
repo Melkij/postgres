@@ -836,7 +836,7 @@ sub enable_streaming
 		'postgresql.conf', qq(
 primary_conninfo='$root_connstr application_name=$name'
 ));
-	$self->request_standby_mode();
+	$self->set_standby_mode();
 	return;
 }
 
@@ -865,12 +865,12 @@ sub enable_restoring
 		'postgresql.conf', qq(
 restore_command = '$copy_command'
 ));
-	$self->request_standby_mode();
+	$self->set_standby_mode();
 	return;
 }
 
 # routine to place standby.signal file
-sub request_standby_mode
+sub set_standby_mode
 {
 	my ($self) = @_;
 	my $signalfile = $self->data_dir . "/standby.signal";
