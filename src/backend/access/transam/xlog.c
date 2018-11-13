@@ -78,6 +78,9 @@
 
 extern uint32 bootstrap_data_checksum_version;
 
+/* Unsupported old recovery command file names (relative to $PGDATA) */
+#define RECOVERY_COMMAND_FILE	"recovery.conf"
+#define RECOVERY_COMMAND_DONE	"recovery.done"
 
 /* User-settable parameters */
 int			max_wal_size_mb = 1024; /* 1 GB */
@@ -12215,7 +12218,7 @@ CheckForStandbyTrigger(void)
 		return true;
 	}
 
-	if (PromoteTriggerFile == NULL)
+	if (PromoteTriggerFile == NULL && strcmp(PromoteTriggerFile, "") != 0)
 		return false;
 
 	if (stat(PromoteTriggerFile, &stat_buf) == 0)

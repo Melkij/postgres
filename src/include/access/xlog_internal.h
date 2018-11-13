@@ -143,6 +143,21 @@ typedef XLogLongPageHeaderData *XLogLongPageHeader;
 #define XLOGDIR				"pg_wal"
 #define XLOG_CONTROL_FILE	"global/pg_control"
 
+/* File path names (all relative to $PGDATA) */
+#define BACKUP_LABEL_FILE		"backup_label"
+#define BACKUP_LABEL_OLD		"backup_label.old"
+
+#define TABLESPACE_MAP			"tablespace_map"
+#define TABLESPACE_MAP_OLD		"tablespace_map.old"
+
+/* files to signal promotion to primary */
+#define PROMOTE_SIGNAL_FILE		"promote"
+#define FALLBACK_PROMOTE_SIGNAL_FILE  "fallback_promote"
+
+/* files to signal entering to recovery or standby mode */
+#define RECOVERY_SIGNAL_FILE	"recovery.signal"
+#define STANDBY_SIGNAL_FILE		"standby.signal"
+
 /*
  * These macros encapsulate knowledge about the exact layout of XLog file
  * names, timeline history file names, and archive-status file names.

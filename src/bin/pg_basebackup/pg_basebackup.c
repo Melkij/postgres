@@ -33,6 +33,7 @@
 #include "fe_utils/string_utils.h"
 #include "getopt_long.h"
 #include "libpq-fe.h"
+#include "miscadmin.h"
 #include "pqexpbuffer.h"
 #include "pgtar.h"
 #include "pgtime.h"
@@ -133,9 +134,6 @@ static volatile LONG has_xlogendptr = 0;
 
 /* Contents of configuration file to be generated */
 static PQExpBuffer recoveryconfcontents = NULL;
-
-#define PG_AUTOCONF_FILENAME		"postgresql.auto.conf"
-#define STANDBY_SIGNAL_FILE 		"standby.signal"
 
 /* Function headers */
 static void usage(void);
@@ -349,8 +347,7 @@ usage(void)
 	printf(_("  -r, --max-rate=RATE    maximum transfer rate to transfer data directory\n"
 			 "                         (in kB/s, or use suffix \"k\" or \"M\")\n"));
 	printf(_("  -R, --write-recovery-conf\n"
-			 "                         append replication config to " PG_AUTOCONF_FILENAME "\n"
-			 "                         and place " STANDBY_SIGNAL_FILE " file\n"));
+			 "                         write configuration for replication\n"));
 	printf(_("  -T, --tablespace-mapping=OLDDIR=NEWDIR\n"
 			 "                         relocate tablespace in OLDDIR to NEWDIR\n"));
 	printf(_("      --waldir=WALDIR    location for the write-ahead log directory\n"));
