@@ -5404,14 +5404,16 @@ validateRecoveryParameters(void)
 	 */
 	if (StandbyModeRequested)
 	{
-		if (PrimaryConnInfo == NULL && recoveryRestoreCommand == NULL)
+		if ((PrimaryConnInfo == NULL || strcmp(PrimaryConnInfo, "") == 0) &&
+			(recoveryRestoreCommand == NULL || strcmp(recoveryRestoreCommand, "") == 0))
 			ereport(WARNING,
 					(errmsg("specified neither primary_conninfo nor restore_command"),
 					 errhint("The database server will regularly poll the pg_wal subdirectory to check for files placed there.")));
 	}
 	else
 	{
-		if (recoveryRestoreCommand == NULL)
+		if (recoveryRestoreCommand == NULL ||
+			strcmp(recoveryRestoreCommand, "") == 0)
 			ereport(FATAL,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("must specify restore_command when standby mode is not enabled")));
@@ -7617,7 +7619,7 @@ StartupXLOG(void)
 		/*
 		 * And finally, execute the recovery_end_command, if any.
 		 */
-		if (recoveryEndCommand)
+		if (recoveryEndCommand && strcmp(recoveryEndCommand, "") != 0)
 			ExecuteRecoveryCommand(recoveryEndCommand,
 								   "recovery_end_command",
 								   true);
@@ -9339,7 +9341,7 @@ CreateRestartPoint(int flags)
 	/*
 	 * Finally, execute archive_cleanup_command, if any.
 	 */
-	if (archiveCleanupCommand)
+	if (archiveCleanupCommand && strcmp(archiveCleanupCommand, "") != 0)
 		ExecuteRecoveryCommand(archiveCleanupCommand,
 							   "archive_cleanup_command",
 							   false);
@@ -12218,7 +12220,7 @@ CheckForStandbyTrigger(void)
 		return true;
 	}
 
-	if (PromoteTriggerFile == NULL && strcmp(PromoteTriggerFile, "") != 0)
+	if (PromoteTriggerFile == NULL || strcmp(PromoteTriggerFile, "") == 0)
 		return false;
 
 	if (stat(PromoteTriggerFile, &stat_buf) == 0)
